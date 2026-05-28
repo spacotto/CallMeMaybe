@@ -5,53 +5,84 @@ Usage:
     Example: python3 main.py
 """
 
-# ----------------------------------------------------------------------------
-#  Imports
-# ----------------------------------------------------------------------------
-
+import argparse
+import json
 import os
 import sys
-import json
-import argparse
 from pydantic import ValidationError
+
 from utils import error, warning
+from src.parser import load_function_definitions, load_input_prompts
 
-# ----------------------------------------------------------------------------
-#  Main entry point
-# ----------------------------------------------------------------------------
+def execute_pipeline(func_path: str, input_path: str, output_path: str) -> None:
+    """Orchestrates the program flow using the parsing module."""
 
-def main() -> None:
+    # --- Parse and validate data structures
 
     try:
-        ap = ArgumentParser(description="Call Me Maybe: LLM Function Calling")
-        ap.add_argument("--functions_definition",
-                        default="data/input/functions_definition.json")
-        ap.add_argument("--input",
-                        default="data/input/function_calling_tests.json")
-        ap.add_argument("--output",
-                        default="data/output/function_calls.json")
+        functions = load_function_definitions(func_path)
+        prompts = load_input_prompts(input_path)
 
-        args = ap.parse_args()
+    except (FileNotFoundError, ValueError, ValidationError) as e:
+        error(f"Initialization Failed: {e}")
+        sys.exit(1)
 
-        if '--functions_definition' not in args:
-            raise FileNotFoundError('No functions definition provided')
+    print(f">>> Verified {len(functions)} system functions.")
+    print(f">>> Processing {len(prompts)} validation prompts...")
 
-    except FileNotFoundError as e:
-        error(e)
-        warning("Usage: make run ...")
-        return
+    output_results = []
 
-    except Exception as e:
-        error(e)
-        return
+    # --- Iterate through isolated prompt streams
 
-    # Define the arguments
+    for item in prompts:
 
-    print(f"Loading definitions from: {args.functions_definition}")
-    print(f"Reading prompts from: {args.input}")
-    print(f"Writing outputs to: {args.output}")
+        try:
+            # item.prompt is guaranteed to exist and be a string thanks to Pydantic
+            current_prompt = item.prompt
 
-    # TODO: Pydantic validation, LLM SDK, and Constrained Decoder here!
+            # --- TODO: Invoke constrained decoding engine here ---
+            # result_name, result_params = run_decoder(current_prompt, functions)
+
+            # Temporary mock values for structural demonstration
+            result_name = "fn_add_numbers"
+            result_params = {"a": 2, "b": 3}
+
+            output_results.append({
+                "prompt": current_prompt,
+                "name": result_name,
+                "parameters": result_params
+            })
+
+        except Exception as prompt_err:
+            # Keeps individual pipeline anomalies from crashing the program execution
+            warning(f"Skipping prompt due to internal failure: {prompt_err}")
+            continue
+
+    # --- Secure output destination & dump results
+
+    output_dir = os.path.dirname(output_path)
+
+    if output_dir and not os.path.exists(output_dir):
+        os.makedirs(output_dir, exist_ok=True)
+
+    try:
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(output_results, f, indent=2)
+        print(f"✅ Run complete. Output safely recorded to: {output_path}")
+
+    except IOError as e:
+        error(f"Failed to write output file: {e}")
+        sys.exit(1)
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser(description="Call Me Maybe: LLM Function Calling")
+    ap.add_argument("--functions_definition", default="data/input/functions_definition.json")
+    ap.add_argument("--input", default="data/input/function_calling_tests.json")
+    ap.add_argument("--output", default="data/output/function_calls.json")
+    args = ap.parse_args()
+
+    execute_pipeline(args.functions_definition, args.input, args.output)
 
 
 if __name__ == "__main__":
