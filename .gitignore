@@ -1,6 +1,10 @@
 # Call Me Maybe
 data/output/
 
+# Temps
+*.swp
+*.swo
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
