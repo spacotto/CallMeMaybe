@@ -82,8 +82,11 @@ install:
 # ------------------------------------------------------------
 
 run:
-	@$(ECHO) "$(YELLOW)>>> Running $(MAIN) $(MAP)...$(RESET)"
-	@$(PYTHON) $(MAIN) $(MAP)
+	@$(ECHO) "$(YELLOW)>>> Running $(MAIN)...$(RESET)"
+	$(UV) run $(PYTHON) -m src \
+	--functions_definition data/input/functions_definition.json \
+	--input data/input/function_calling_tests.json \
+	--output data/output/function_calls.json
 
 # ------------------------------------------------------------
 #  debug — launch the main script under pdb
