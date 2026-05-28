@@ -2,11 +2,15 @@
 #  VARIABLES
 # ============================================================
 
-VENV    := .venv
-UV	:= $(VENV)/bin/uv
-PYTHON  := $(VENV)/bin/python3
-MAIN    := main.py
-TEST	:= tests/
+UV      := uv
+PYTHON  := $(UV) run python
+MYPY    := $(UV) run mypy
+FLAKE8  := $(UV) run flake8
+PYTEST  := $(UV) run pytest
+
+FUNC_DEF := data/input/functions_definition.json
+INPUT_F  := data/input/function_calling_tests.json
+OUTPUT_F := data/output/function_calls.json
 
 # ------------------------------------------------------------
 #  Ansi colors
@@ -31,14 +35,13 @@ FIND	:= /bin/find
 IGNORE	:= 2>/dev/null || true
 MV	:= /bin/mv
 RM	:= /bin/rm -rf
-FLAKE	:= flake8 . --extend-exclude=.venv,llm_sdk,tests $(IGNORE)
 
 # ============================================================
 #  RULES
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help activate clean-venv flag test
+       	help test
 
 # ------------------------------------------------------------
 #  Default target
@@ -57,8 +60,6 @@ help:
 	@$(ECHO) ""
 	@$(ECHO) " $(CYAN)BONUS RULES$(RESET)"
 	@$(ECHO) ""
-	@$(ECHO) "     $(CYAN)activate$(RESET)     Display the command to activate the venv"
-	@$(ECHO) "     $(CYAN)clean-venv$(RESET)   Remove the venv"
 	@$(ECHO) "     $(CYAN)test$(RESET)         Run pytest test set"
 	@$(ECHO) ""
 
@@ -67,34 +68,31 @@ help:
 # ------------------------------------------------------------
 
 install:
-	@if [ ! -d "$(VENV)" ]; then \
-		$(ECHO) "$(YELLOW)>>> No venv detected$(RESET)"; \
-		$(ECHO) "$(YELLOW)>>> Creating new venv...$(RESET)"; \
-		python3 -m venv $(VENV); \
-	fi
-	@$(ECHO) "$(YELLOW)>>> Installing dependencies inside $(VENV)...$(RESET)" 
-	@$(PIP) install --upgrade pip 
-	@$(PIP) install -r requirements.txt
-	@$(ECHO) "$(CYAN)>>> Installation complete.$(RESET)"
+	@$(ECHO) "$(YELLOW)>>> Synchronizing project dependencies via uv...$(RESET)"
+	$(UV) sync
+	@$(ECHO) "$(CYAN)>>> Environment sync complete.$(RESET)"
 
 # ------------------------------------------------------------
 #  run — execute the main script
 # ------------------------------------------------------------
 
 run:
-	@$(ECHO) "$(YELLOW)>>> Running $(MAIN)...$(RESET)"
-	$(UV) run $(PYTHON) -m src \
-	--functions_definition data/input/functions_definition.json \
-	--input data/input/function_calling_tests.json \
-	--output data/output/function_calls.json
+	@$(ECHO) "$(YELLOW)>>> Running the function calling tool...$(RESET)"
+	$(PYTHON) -m src \
+	--functions_definition $(FUNC_DEF) \
+	--input $(INPUT_F) \
+	--output $(OUTPUT_F)
 
 # ------------------------------------------------------------
 #  debug — launch the main script under pdb
 # ------------------------------------------------------------
 
 debug:
-	@$(ECHO) "$(YELLOW)>>> Launching $(MAIN) under pdb...$(RESET)"
-	@$(PYTHON) -m pdb $(MAIN) $(CONFIG)
+	@$(ECHO) "$(YELLOW)>>> Launching src module under pdb...$(RESET)"
+	$(PYTHON) -m pdb src \
+	--functions_definition $(FUNC_DEF) \
+	--input $(INPUT_F) \
+	--output $(OUTPUT_F)
 
 # ------------------------------------------------------------
 #  clean — remove byte-compiled files and tool caches
@@ -115,8 +113,6 @@ clean:
 	@$(FIND) . -type d -name ".pytest_cache" -exec $(RM) {} + $(IGNORE)
 	@$(ECHO) "$(YELLOW)>>> Cleaning *.egg-info$(RESET)"
 	@$(FIND) . -type d -name "*.egg-info" -exec $(RM) {} + $(IGNORE)
-	@$(ECHO) "$(YELLOW)>>> Cleaning .pytest_cache$(RESET)"
-	@$(FIND) . -type d -name ".pytest_cache" -exec $(RM) {} + $(IGNORE)
 	@$(ECHO) "$(CYAN)>>> Done.$(RESET)"
 
 # ------------------------------------------------------------
@@ -125,7 +121,7 @@ clean:
 
 lint:
 	@$(ECHO) "$(YELLOW)>>> Running flake8...$(RESET)"
-	@$(FLAKE)
+	@$(FLAKE) . --extend-exclude=.venv,llm_sdk,tests
 	@$(ECHO) "$(YELLOW)>>> Running mypy (standard)...$(RESET)"
 	@mypy . \
 	    --warn-return-any \
@@ -133,7 +129,6 @@ lint:
 	    --ignore-missing-imports \
 	    --disallow-untyped-defs \
 	    --check-untyped-defs \
-	    $(IGNORE)
 
 # ------------------------------------------------------------
 #  lint-strict — maximum mypy strictness (recommended)
@@ -141,32 +136,14 @@ lint:
 
 lint-strict:
 	@$(ECHO) "$(YELLOW)>>> Running flake8...$(RESET)"
-	@$(FLAKE)
+	@$(FLAKE) . --extend-exclude=.venv,llm_sdk,tests
 	@$(ECHO) "$(YELLOW)>>> Running mypy (strict)...$(RESET)"
-	@mypy . --strict $(IGNORE)
-
-# ------------------------------------------------------------
-#  activate — display the commmand to activate the venv
-# ------------------------------------------------------------
-
-activate:
-	@$(ECHO) "$(YELLOW)>>> Run this command to activate the venv:$(RESET)"
-	@$(ECHO) "source $(VENV)/bin/activate"
-
-# ------------------------------------------------------------
-#  clean-venv — remove virtual environment
-# ------------------------------------------------------------
-
-clean-venv:
-	@$(ECHO) "$(YELLOW)>>> Cleaning venv$(RESET)"
-	@$(RM) $(VENV) $(IGNORE)
-	@$(ECHO) "$(CYAN)>>> Done.$(RESET)"
+	@mypy . --strict
 
 # ------------------------------------------------------------
 #  test — test the project with pytest framework 
 # ------------------------------------------------------------
 
 test:
-	@$(ECHO) "$(YELLOW)>>> Running pytest...$(RESET)"
-	@$(ECHO) "$(YELLOW)>>> Testing with $(TEST) ...$(RESET)"
-	@$(PYTHON) -m pytest -v -s $(TEST) 
+	@echo "$(YELLOW)>>> Running pytest...$(RESET)"
+	$(PYTEST) -v -s tests/
