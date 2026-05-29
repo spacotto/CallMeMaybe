@@ -129,7 +129,7 @@ clean:
 
 lint:
 	@$(ECHO) "$(YELLOW)>>> Running flake8...$(RESET)"
-	@$(FLAKE8) . $(EXCLUDE)
+	@$(FLAKE8) . $(EXCLUDE) $(IGNORE)
 	@$(ECHO) "$(YELLOW)>>> Running mypy (standard)...$(RESET)"
 	@$(MYPY) . \
 	    --warn-return-any \
@@ -144,7 +144,7 @@ lint:
 
 lint-strict:
 	@$(ECHO) "$(YELLOW)>>> Running flake8...$(RESET)"
-	@$(FLAKE8) . $(EXCLUDE) 
+	@$(FLAKE8) . $(EXCLUDE) $(IGNORE) 
 	@$(ECHO) "$(YELLOW)>>> Running mypy (strict)...$(RESET)"
 	@$(MYPY) . --strict
 
