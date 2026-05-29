@@ -25,6 +25,14 @@ Instead of relying on black-box abstractions like Hugging Face's `transformers` 
 * **Greedy Lexing Algorithm:** For translating text to neural network integers (encoding), the system uses a longest-match greedy lexer. This avoids the heavy computational overhead of parsing a strict `merges.txt` ruleset while maintaining near-perfect structural alignment for constrained decoding tasks.
 * **Low-Level Byte Buffering:** For decoding, the system bypasses Python's high-level string handlers. It maps BPE characters directly to their raw 0-255 integer values and loads them into a contiguous `bytearray`. This allows the underlying C-engine to safely reconstruct UTF-8 strings before rendering them to the console.
 
+---
+
+### Formatter: Decoupled Multi-Model Context Preparation
+
+To **prevent the core decoding engine from becoming tightly coupled to specific language model sub-dialects**, the presentation layer is isolated entirely inside the `Formatter` class.
+* **The Context Prefilling Strategy:** Causal language models are inherently trained to generate natural conversational preambles (e.g., *"Sure! Here is the structured data you requested:"*). This breaks deterministic text parsing. The formatter solves this by **hard-injecting the exact terminal sequence of the assistant token** (e.g., `<|im_start|>assistant\n`) **at the end of the prompt**. This pins the model's generation cursor precisely where the JSON syntax must begin, **eliminating conversational noise** at zero computational cost.
+* **Agnostic Token Boundary Encapsulation:** By parameterising template engines via explicit formatting enums (`ModelFormat.CHATML` and `ModelFormat.INSTRUCT`), the system ensures that adding or testing an entirely different target model family requires **zero structural alterations to the execution loop or the tokenizer logic**.
+
 ## Performance analysis: Accuracy, Speed, and Reliability
 
 ## Challenges faced
@@ -36,6 +44,16 @@ Instead of relying on black-box abstractions like Hugging Face's `transformers` 
 
 >[!TIP]
 >**The Solution:** By dropping the outputs into the intermediate `bytearray` buffer mentioned in the design decisions, the engine safely collects the fragmented binary data over multiple autoregressive loops, only casting to a readable string once the memory block is complete and valid.
+
+---
+
+### Conversational Padding and Syntax Deviations
+
+>[!WARNING]
+>**The Problem:** Even with clear system instructions demanding raw JSON output, models frequently **loop into markdown blocks** (````json ... ````) or **append polite introductory text**. In production or automated environments, this leads to immediate downstream runtime crashes during `json.loads()` verification phases.
+
+>[!TIP]
+>**The Solution:** By combining the **prompt-prefilling strategy** with the **strict logit tracking of the constrained decoding loop**, the model is trapped inside a **structural state machine**. Because the prompt **ends exactly at the point of assistant execution** and the engine actively **blocks non-JSON tokens from being predicted**, the model is physically **prevented from outputting markdown wrappers or introductory prose**.
 
 ## Testing strategy
 
