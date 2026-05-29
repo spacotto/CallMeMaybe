@@ -86,7 +86,7 @@ install:
 
 run:
 	@$(ECHO) "$(YELLOW)>>> Running the function calling tool...$(RESET)"
-	$(PYTHON) -m src \
+	@$(PYTHON) -m src \
 	--functions_definition $(FUNC_DEF) \
 	--input $(INPUT_F) \
 	--output $(OUTPUT_F)
