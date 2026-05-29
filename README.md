@@ -10,6 +10,15 @@ This project introduces function calling in Large Language Models (LLMs) by buil
 
 ## Design decisions
 
+### Multi-Model Support & Resource Efficiency (SmolLM2-360M-Instruct)
+
+To fulfil the multi-model capability criteria and prove that the core system architecture is entirely decoupled from specific text abstractions, **SmolLM2-360M-Instruct** was chosen as the secondary evaluation model.
+* **Tokenizer Architecture Synergy:** SmolLM2 utilises the **same Byte-Level BPE tokenizer architecture as the primary Qwen model**, relying on identical GPT-2 style byte-to-unicode character maps (such as the `Ġ` space artefact). This architectural alignment validates the custom, low-level `bytearray` buffering mechanism across distinct models without duplicating the binary processing layer.
+* **Decoupled Prompt Verification:** While sharing a tokenizer footprint, SmolLM2 uses a uniquely tuned instruction configuration. Implementing this model serves as a direct proof of concept that the `Formatter` class successfully **abstracts away chat template strings**, presenting a clean, unified prefix stream to the core execution engine.
+* **Extreme Hardware Optimisation:** Operating at an ultra-lightweight 360 million parameters, this model **minimises local RAM and CPU usage**, aligning perfectly with the constraint requirements for **fast, reproducible evaluation loops** on restricted campus environments.
+
+---
+
 ### [Tokenizer](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md): From-Scratch BBPE Engine
 
 Instead of relying on black-box abstractions like Hugging Face's `transformers` library, this project implements a custom **Byte-Level Byte-Pair Encoding (BBPE)** tokenizer from scratch. 
