@@ -71,6 +71,8 @@ with the final integer token IDs required by the model's neural network.
 Array:      [ 3838,            374,             279 ]
 ```
 
+---
+
 ### Decoding: The Byte Buffer (`decode`)
 Decoding **reconstructs the string from neural network outputs**. Because a single complex character (like a French accent or an emoji) might be split across multiple tokens, decoding token-by-token is dangerous and can crash Python's string engine.
 1. **String Translation:** IDs are mapped back to their BPE characters.
