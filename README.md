@@ -10,9 +10,23 @@ This project introduces function calling in Large Language Models (LLMs) by buil
 
 ## Design decisions
 
+### [Tokenizer](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md): From-Scratch BBPE Engine
+
+Instead of relying on black-box abstractions like Hugging Face's `transformers` library, this project implements a custom **Byte-Level Byte-Pair Encoding (BBPE)** tokenizer from scratch. 
+* **Greedy Lexing Algorithm:** For translating text to neural network integers (encoding), the system uses a longest-match greedy lexer. This avoids the heavy computational overhead of parsing a strict `merges.txt` ruleset while maintaining near-perfect structural alignment for constrained decoding tasks.
+* **Low-Level Byte Buffering:** For decoding, the system bypasses Python's high-level string handlers. It maps BPE characters directly to their raw 0-255 integer values and loads them into a contiguous `bytearray`. This allows the underlying C-engine to safely reconstruct UTF-8 strings before rendering them to the console.
+
 ## Performance analysis: Accuracy, Speed, and Reliability
 
 ## Challenges faced
+
+### The Multi-Byte Fragmentation Crash
+
+>[!WARNING]
+>**The Problem:** Language models do not respect character boundaries when outputting tokens. A complex multi-byte character (like a French accent `é` or a system emoji) is often split across two or three separate neural network outputs. Attempting to decode these tokens one by one causes fatal runtime crashes, as half a UTF-8 character is technically invalid memory.
+
+>[!TIP]
+>**The Solution:** By dropping the outputs into the intermediate `bytearray` buffer mentioned in the design decisions, the engine safely collects the fragmented binary data over multiple autoregressive loops, only casting to a readable string once the memory block is complete and valid.
 
 ## Testing strategy
 
