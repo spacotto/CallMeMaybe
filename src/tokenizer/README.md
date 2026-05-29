@@ -25,6 +25,60 @@ Encoding is the process of **chunking a continuous string into the largest possi
 >[!NOTE]
 > **Greedy vs. Rules-Based Merging:** This encoder uses a greedy longest-match algorithm rather than parsing a strict `merges.txt` rule file. While mathematically sound and highly robust for constrained decoding, the exact array of IDs generated may occasionally differ slightly from the official Qwen tokenizer on complex, multi-syllabic words. The decoded output remains perfectly functionally equivalent.
 
+Encoding pipeline example: 
+
+```
+=========================================================================
+STAGE 1: THE RAW INPUT TEXT
+The user provides a standard string or natural language prompt.
+=========================================================================
+Text: "What is the"
+                               |
+                               v
+
+=========================================================================
+STAGE 2: UTF-8 BYTE EXTRACTION (text.encode('utf-8'))
+Python's core string engine breaks the text down into raw binary memory,
+producing an array of low-level bytes (0-255).
+=========================================================================
+Buffer:     [ 87, 104, 97, 116, 32, 105, 115, 32, 116, 104, 101 ]
+               |               |               |
+               v               v               v
+
+=========================================================================
+STAGE 3: BYTE-TO-UNICODE TRANSLATION (self.byte_encoder)
+Every single raw byte integer is mapped to its specialized, printable 
+BPE character counterpart. The space byte (32) becomes 'Ġ'.
+=========================================================================
+Raw Bytes:  [ [87,104,97,116], [32, 105, 115],  [32, 116, 104, 101] ]
+               |                |                |
+               v                v                v
+
+=========================================================================
+STAGE 4: GREEDY LONGEST-MATCH LEXING
+Your tokenizer scans the BPE string left-to-right, looking ahead to 
+slice out the largest possible chunks that exist in the vocabulary.
+=========================================================================
+BPE Tokens: [ "What",          "Ġis",           "Ġthe" ]
+               |                |                |
+               v                v                v
+
+=========================================================================
+STAGE 5: VOCABULARY MAPPING (self.token_to_id)
+The code queries the vocabulary dictionary to replace the string tokens
+with the final integer token IDs required by the model's neural network.
+=========================================================================
+Array:      [ 3838,            374,             279 ]
+```
+
+### Decoding: The Byte Buffer (`decode`)
+Decoding **reconstructs the string from neural network outputs**. Because a single complex character (like a French accent or an emoji) might be split across multiple tokens, decoding token-by-token is dangerous and can crash Python's string engine.
+1. **String Translation:** IDs are mapped back to their BPE characters.
+2. **Flattening:** Every character is translated back into its raw 0-255 integer representation.
+3. **Bytearray Casting:** The integers are shoved into a low-level C-style `bytearray`. This allows Python's internal engine to safely stitch fragmented multi-byte characters back together before rendering the final UTF-8 string.
+
+Decoding pipeline example: 
+
 ```
 =========================================================================
 STAGE 1: THE RAW LOGITS / IDs
@@ -70,12 +124,6 @@ back into human-readable text.
 =========================================================================
 Final Text: "What is the"
 ```
-
-### Decoding: The Byte Buffer (`decode`)
-Decoding **reconstructs the string from neural network outputs**. Because a single complex character (like a French accent or an emoji) might be split across multiple tokens, decoding token-by-token is dangerous and can crash Python's string engine.
-1. **String Translation:** IDs are mapped back to their BPE characters.
-2. **Flattening:** Every character is translated back into its raw 0-255 integer representation.
-3. **Bytearray Casting:** The integers are shoved into a low-level C-style `bytearray`. This allows Python's internal engine to safely stitch fragmented multi-byte characters back together before rendering the final UTF-8 string.
 
 ## Usage
 
