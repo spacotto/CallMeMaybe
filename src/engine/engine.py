@@ -20,12 +20,9 @@ class ConstrainedDecoder:
         else:
             self.formatter = Formatter(format_type=ModelFormat.INSTRUCT)
 
-    def generate_function_call(
-        self,
-        user_prompt: str,
-        functions: List[Dict[str, Any]],
-        max_new_tokens: int = 120
-    ) -> str:
+    def generate_function_call(self, user_prompt: str,
+                               functions: List[Dict[str, Any]],
+                               max_new_tokens: int = 120) -> str:
         """
         Executes the autoregressive generation loop, forcing the model
         to emit a valid, schema-compliant JSON structure.
@@ -44,40 +41,74 @@ class ConstrainedDecoder:
 
             masked_logits = self._apply_constraint_mask(raw_logits, allowed_chars)
 
-            # Pure Python argmax equivalent
             next_token_id = max(range(len(masked_logits)), key=masked_logits.__getitem__)
-
-            # Break early if the engine selects an End-of-Sequence marker or structural termination
-            if next_token_id == self.tokenizer.token_to_id.get("<|im_end|>", -1) or current_prefix.endswith("}"):
-                break
-
             generated_ids.append(next_token_id)
+
+            new_prefix = self.tokenizer.decode(generated_ids)
+
+            if self._is_complete_json(new_prefix) or next_token_id == self.tokenizer.token_to_id.get("<|im_end|>", -1):
+                break
 
         return self.tokenizer.decode(generated_ids)
 
+    def _is_complete_json(self, text: str) -> bool:
+        """
+        Tracks bracket depth to definitively trigger loop termination
+        the millisecond the root JSON object closes.
+        """
+        if not text or "{" not in text:
+            return False
+
+        json_str = text[text.find("{"):]
+        depth = 0
+        in_string = False
+        escape = False
+
+        for char in json_str:
+            if escape:
+                escape = False
+                continue
+            if char == "\\":
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
+
+            if not in_string:
+                if char == "{":
+                    depth += 1
+                elif char == "}":
+                    depth -= 1
+                    if depth == 0:
+                        return True
+        return False
+
     def _get_allowed_next_characters(self, current_prefix: str) -> Set[str]:
         """
-        Evaluates the existing generated string prefix to determine the exact set
-        of grammatically legal characters that can follow.
+        Evaluates the generated prefix using a strict JSON state machine.
+        Toggles allowed character sets based on whether the generation cursor
+        is currently inside or outside a string literal.
         """
-        stripped = current_prefix.strip()
-
-        if not stripped:
+        if not current_prefix.strip():
             return {"{"}
 
-        if stripped == "{":
-            return {'"'}
+        in_string = False
+        escape = False
+        for char in current_prefix:
+            if escape:
+                escape = False
+                continue
+            if char == "\\":
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
 
-        if stripped.startswith('{"') and not stripped.endswith('"'):
-            return set("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_\"")
-
-        if stripped.endswith('"') and ":" not in stripped:
-            return {":"}
-
-        if stripped.endswith(":"):
-            return {'"', "[", "{", "0", "1", "2", "3", "4", "5", "6", "7", "8", "9"}
-
-        return set('{}[]:,"-0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_ ')
+        if in_string:
+            return set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\')
+        else:
+            return set('{}[]:,"0123456789 \n\r\ttruefalsenull')
 
     def _apply_constraint_mask(self, logits: List[float], allowed_chars: Set[str]) -> List[float]:
         """
@@ -89,8 +120,7 @@ class ConstrainedDecoder:
         for token_id, token_str in self.id_to_token.items():
             actual_str = token_str.replace("Ġ", " ")
 
-            if actual_str and not any(char in allowed_chars for char in actual_str):
-                # Using standard math.inf instead of torch
+            if actual_str and not all(char in allowed_chars for char in actual_str):
                 masked_logits[token_id] = -math.inf
 
         return masked_logits

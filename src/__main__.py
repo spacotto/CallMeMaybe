@@ -1,85 +1,70 @@
-"""
-"""
-
-import argparse
-import json
-import os
-import sys
-from pydantic import ValidationError
-
-from utils import error, warning
-from src.parser import load_function_definitions, load_input_prompts
-
-def execute_pipeline(func_path: str, input_path: str, output_path: str) -> None:
-    """Orchestrates the program flow using the parsing module."""
-
-    # --- Parse and validate data structures
-
-    try:
-        functions = load_function_definitions(func_path)
-        prompts = load_input_prompts(input_path)
-
-    except (FileNotFoundError, ValueError, ValidationError) as e:
-        error(f"Initialization Failed: {e}")
-        sys.exit(1)
-
-    print(f">>> Verified {len(functions)} system functions.")
-    print(f">>> Processing {len(prompts)} validation prompts...")
-
-    output_results = []
-
-    # --- Iterate through isolated prompt streams
-
-    for item in prompts:
-
-        try:
-            # item.prompt is guaranteed to exist and be a string thanks to Pydantic
-            current_prompt = item.prompt
-
-            # --- TODO: Invoke constrained decoding engine here ---
-            # result_name, result_params = run_decoder(current_prompt, functions)
-
-            # Temporary mock values for structural demonstration
-            result_name = "fn_add_numbers"
-            result_params = {"a": 2, "b": 3}
-
-            output_results.append({
-                "prompt": current_prompt,
-                "name": result_name,
-                "parameters": result_params
-            })
-
-        except Exception as prompt_err:
-            # Keeps individual pipeline anomalies from crashing the program execution
-            warning(f"Skipping prompt due to internal failure: {prompt_err}")
-            continue
-
-    # --- Secure output destination & dump results
-
-    output_dir = os.path.dirname(output_path)
-
-    if output_dir and not os.path.exists(output_dir):
-        os.makedirs(output_dir, exist_ok=True)
-
-    try:
-        with open(output_path, "w", encoding="utf-8") as f:
-            json.dump(output_results, f, indent=2)
-        print(f"✅ Run complete. Output safely recorded to: {output_path}")
-
-    except IOError as e:
-        error(f"Failed to write output file: {e}")
-        sys.exit(1)
-
+import time
+from src.engine import ConstrainedDecoder
+from src.utils import Formatter, error, warning
 
 def main() -> None:
-    ap = argparse.ArgumentParser(description="Call Me Maybe: LLM Function Calling")
-    ap.add_argument("--functions_definition", default="data/input/functions_definition.json")
-    ap.add_argument("--input", default="data/input/function_calling_tests.json")
-    ap.add_argument("--output", default="data/output/function_calls.json")
-    args = ap.parse_args()
+    print(Formatter.apply('bold', 'yellow',
+                          "\n>>> Initializing Constrained Decoder Engine..."))
+    start_time = time.time()
 
-    execute_pipeline(args.functions_definition, args.input, args.output)
+    try:
+        engine = ConstrainedDecoder(model_name="Qwen/Qwen3-0.6B")
+        elaps = time.time() - start_time
+        print(Formatter.apply('bold', 'cyan',
+                              f">>> Engine loaded in {elaps:.2f} seconds.\n"))
 
+    except Exception as e:
+        error(f"Failed to load model architecture: {e}")
+        return
+
+    # MOCK PARSER DATA: Bypassing the parser module temporarily
+    mock_functions = [
+        {
+            "name": "get_weather",
+            "description": "Get the current weather in a given location",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "location": {
+                        "type": "string",
+                        "description": "The city and country, e.g., Paris, France"
+                    },
+                    "unit": {
+                        "type": "string",
+                        "enum": ["celsius", "fahrenheit"]
+                    }
+                },
+                "required": ["location", "unit"]
+            }
+        }
+    ]
+
+    user_prompt = "Can you tell me how cold it is in Paris today? Use Celsius."
+
+    print(Formatter.apply('bold', 'blue', f">>> 👤 User Prompt: ") + user_prompt)
+    print(Formatter.apply('bold', 'yellow',
+                          ">>> Intercepting logits and generating constrained JSON...\n"))
+    print(Formatter.apply(None, 'gray', "-" * 60))
+
+    try:
+        # Execute the constrained decoding loop
+        generation_start = time.time()
+        result = engine.generate_function_call(
+            user_prompt=user_prompt,
+            functions=mock_functions,
+            max_new_tokens=120
+        )
+
+        # Display the guaranteed valid JSON in striking lime green
+        print(Formatter.apply('bold', 'lime', result))
+        print(Formatter.apply(None, 'gray', "-" * 60))
+
+        gen_time = time.time() - generation_start
+        print(Formatter.apply('bold', 'cyan',
+                              f">>>  Generation completed in {gen_time:.2f} seconds.\n"))
+
+    except Exception as e:
+        error(f"Generation loop failed: {e}")
 
 if __name__ == "__main__":
     main()

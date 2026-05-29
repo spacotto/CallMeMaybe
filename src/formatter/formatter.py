@@ -31,8 +31,10 @@ class Formatter:
         # Build the strict system instruction
         system_instruction = (
             "You are a strict logical engine.\n"
-            "You MUST respond with a single, "
-            "valid JSON object representing a function call.\n"
+            "You MUST respond with a single, valid JSON object.\n"
+            "The output MUST strictly follow this format:"
+            "{\"name\": \"function_name\","
+            "\"arguments\": {\"arg1\": \"value\"}}\n"
             "Do NOT include any conversational text.\n"
             "Do NOT wrap the output in markdown blocks.\n"
             "You have access to the following functions.\n"
