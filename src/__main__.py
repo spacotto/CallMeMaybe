@@ -1,8 +1,4 @@
 """
-
-Usage:
-    python3 main.py
-    Example: python3 main.py
 """
 
 import argparse
