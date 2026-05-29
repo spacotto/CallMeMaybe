@@ -2,14 +2,21 @@
 #  VARIABLES
 # ============================================================
 
-UV      := uv
-PYTHON  := $(UV) run python
-MYPY    := $(UV) run mypy
-FLAKE8  := $(UV) run flake8
-PYTEST  := $(UV) run pytest
+UV       := uv
+VENV	 := .venv
+USER	 := spacotto 
+LLM	 := llm_sdk
+PYTHON   := $(UV) run python
+
+PYTEST   := $(UV) run pytest
+TESTDIR	 := tests
+
+MYPY     := $(UV) run mypy
+FLAKE8   := $(UV) run flake8
+EXCLUDE	 := --extend-exclude=$(VENV),$(TESTDIR),$(LLM)
 
 FUNC_DEF := data/input/functions_definition.json
-INPUT_F  := data/input/function_calling_tests.json
+INPUT_F	 := data/input/function_calling_tests.json
 OUTPUT_F := data/output/function_calls.json
 
 # ------------------------------------------------------------
@@ -30,7 +37,7 @@ WHITE	:= \033[1;97m
 #  Additional commands
 # ------------------------------------------------------------
 
-ECHO	:= echo 
+ECHO	:= echo -e 
 FIND	:= /bin/find
 IGNORE	:= 2>/dev/null || true
 MV	:= /bin/mv
@@ -41,7 +48,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help test
+       	help test campus-init
 
 # ------------------------------------------------------------
 #  Default target
@@ -60,6 +67,7 @@ help:
 	@$(ECHO) ""
 	@$(ECHO) " $(CYAN)BONUS RULES$(RESET)"
 	@$(ECHO) ""
+	@$(ECHO) "     $(CYAN)campus-init$(RESET)  Set up environment in /tmp"
 	@$(ECHO) "     $(CYAN)test$(RESET)         Run pytest test set"
 	@$(ECHO) ""
 
@@ -121,14 +129,14 @@ clean:
 
 lint:
 	@$(ECHO) "$(YELLOW)>>> Running flake8...$(RESET)"
-	@$(FLAKE) . --extend-exclude=.venv,llm_sdk,tests
+	@$(FLAKE8) . $(EXCLUDE)
 	@$(ECHO) "$(YELLOW)>>> Running mypy (standard)...$(RESET)"
-	@mypy . \
+	@$(MYPY) . \
 	    --warn-return-any \
 	    --warn-unused-ignores \
 	    --ignore-missing-imports \
 	    --disallow-untyped-defs \
-	    --check-untyped-defs \
+	    --check-untyped-defs
 
 # ------------------------------------------------------------
 #  lint-strict — maximum mypy strictness (recommended)
@@ -136,14 +144,30 @@ lint:
 
 lint-strict:
 	@$(ECHO) "$(YELLOW)>>> Running flake8...$(RESET)"
-	@$(FLAKE) . --extend-exclude=.venv,llm_sdk,tests
+	@$(FLAKE8) . $(EXCLUDE) 
 	@$(ECHO) "$(YELLOW)>>> Running mypy (strict)...$(RESET)"
-	@mypy . --strict
+	@$(MYPY) . --strict
 
 # ------------------------------------------------------------
 #  test — test the project with pytest framework 
 # ------------------------------------------------------------
 
 test:
-	@echo "$(YELLOW)>>> Running pytest...$(RESET)"
+	@$(ECHO) "$(YELLOW)>>> Running pytest...$(RESET)"
 	$(PYTEST) -v -s tests/
+
+# ------------------------------------------------------------
+#  campus-init — Set up environment in /tmp to bypass space constraints
+# ------------------------------------------------------------
+
+campus-init:
+	@$(ECHO) "$(YELLOW)>>> Routing uv cache to /tmp...$(RESET)"
+	@export UV_CACHE_DIR="/tmp/$(USER)_uv_cache"; \
+	$(ECHO) "$(YELLOW)>>> Creating venv in /tmp...$(RESET)" ; \
+	$(UV) venv "/tmp/$(USER)_callmemaybe_venv" ; \
+	$(ECHO) "$(YELLOW)>>> Linking $(VENV)...$(RESET)" ; \
+	$(RM) $(VENV) ; \
+	ln -s "/tmp/$(USER)_callmemaybe_venv" $(VENV) ; \
+	$(ECHO) "$(YELLOW)>>> Syncing dependencies...$(RESET)" ; \
+	$(UV) sync
+	@$(ECHO) "$(CYAN)>>> Campus environment ready!$(RESET)"
