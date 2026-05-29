@@ -33,6 +33,11 @@ To **prevent the core decoding engine from becoming tightly coupled to specific 
 * **The Context Prefilling Strategy:** Causal language models are inherently trained to generate natural conversational preambles (e.g., *"Sure! Here is the structured data you requested:"*). This breaks deterministic text parsing. The formatter solves this by **hard-injecting the exact terminal sequence of the assistant token** (e.g., `<|im_start|>assistant\n`) **at the end of the prompt**. This pins the model's generation cursor precisely where the JSON syntax must begin, **eliminating conversational noise** at zero computational cost.
 * **Agnostic Token Boundary Encapsulation:** By parameterising template engines via explicit formatting enums (`ModelFormat.CHATML` and `ModelFormat.INSTRUCT`), the system ensures that adding or testing an entirely different target model family requires **zero structural alterations to the execution loop or the tokenizer logic**.
 
+---
+
+### Engine: Zero-Dependency Argmax Evaluation
+Per the strict pedagogical constraints of the subject, external tensor libraries (such as `torch` or `numpy`) are forbidden. Rather than offloading the logit sorting to a C++ backend, the constrained decoding loop calculates the `argmax` over the ~150,000-token vocabulary using Python standard library routines (`max(range(), key=...)`). This guarantees the project remains entirely self-contained while still executing the masking loop efficiently on standard CPU hardware.
+
 ## Performance analysis: Accuracy, Speed, and Reliability
 
 ## Challenges faced
