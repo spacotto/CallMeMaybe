@@ -25,6 +25,52 @@ Encoding is the process of **chunking a continuous string into the largest possi
 >[!NOTE]
 > **Greedy vs. Rules-Based Merging:** This encoder uses a greedy longest-match algorithm rather than parsing a strict `merges.txt` rule file. While mathematically sound and highly robust for constrained decoding, the exact array of IDs generated may occasionally differ slightly from the official Qwen tokenizer on complex, multi-syllabic words. The decoded output remains perfectly functionally equivalent.
 
+```
+=========================================================================
+STAGE 1: THE RAW LOGITS / IDs
+The model's neural network outputs raw integers.
+=========================================================================
+Array:      [ 3838,            374,             279 ]
+              |                |                |
+              v                v                v
+
+=========================================================================
+STAGE 2: BPE VOCABULARY LOOKUP (self.id_to_token)
+Your code looks up each integer in the vocab dictionary. 
+Notice the 'Ġ' artifact, which the tokenizer uses to represent a space 
+so it doesn't crash on unprintable whitespace characters.
+=========================================================================
+BPE Tokens: [ "What",          "Ġis",           "Ġthe" ]
+              |                |                |
+              v                v                v
+
+=========================================================================
+STAGE 3: BYTE-LEVEL TRANSLATION (self.byte_decoder)
+You map every single character (including 'Ġ') back to its raw 
+ASCII/Unicode byte integer (0-255). 
+'Ġ' safely translates to 32 (the standard byte for a space).
+=========================================================================
+Raw Bytes:  [ [87,104,97,116], [32, 105, 115],  [32, 116, 104, 101] ]
+              |                |                |
+              v                v                v
+
+=========================================================================
+STAGE 4: THE BYTEARRAY BUFFER (bytearray(raw_bytes))
+You flatten all those individual lists into one continuous, low-level 
+memory buffer of raw numbers.
+=========================================================================
+Buffer:     [ 87, 104, 97, 116, 32, 105, 115, 32, 116, 104, 101 ]
+                               |
+                               v
+
+=========================================================================
+STAGE 5: UTF-8 DECODING (.decode('utf-8'))
+Python's C-engine reads the raw memory buffer and safely casts it 
+back into human-readable text.
+=========================================================================
+Final Text: "What is the"
+```
+
 ### Decoding: The Byte Buffer (`decode`)
 Decoding **reconstructs the string from neural network outputs**. Because a single complex character (like a French accent or an emoji) might be split across multiple tokens, decoding token-by-token is dangerous and can crash Python's string engine.
 1. **String Translation:** IDs are mapped back to their BPE characters.
