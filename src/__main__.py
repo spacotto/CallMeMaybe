@@ -30,6 +30,12 @@ def main() -> None:
         help="Path to save generated JSON results (default: data/output/function_calls.json)"
     )
 
+    cli_parser.add_argument(
+        "--visual",
+        action="store_true",
+        help="Automatically launch the visualizer dashboard after generation completes"
+    )
+
     args = cli_parser.parse_args()
 
     print(Formatter.apply('bold', 'cyan', "\n⏳ Initializing Constrained Decoder Engine..."))
@@ -101,6 +107,11 @@ def main() -> None:
         json.dump(results, f, indent=4)
 
     print(Formatter.apply('bold', 'magenta', f"💾 All results successfully saved to {args.output}\n"))
+
+    # 6. Launch the visualizer if the flag was passed
+    if args.visual:
+        from src.visualizer.visualizer import render_dashboard
+        render_dashboard(args.output)
 
 if __name__ == "__main__":
     main()

@@ -48,7 +48,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help test campus-init
+       	help visual test campus-init
 
 # ------------------------------------------------------------
 #  Default target
@@ -171,3 +171,15 @@ campus-init:
 	$(ECHO) "$(YELLOW)>>> Syncing dependencies...$(RESET)" ; \
 	$(UV) sync
 	@$(ECHO) "$(CYAN)>>> Campus environment ready!$(RESET)"
+
+# ------------------------------------------------------------
+#  visual — test the project with pytest framework 
+# ------------------------------------------------------------
+
+visual:
+	@$(ECHO) "$(YELLOW)>>> Launching visualiser...$(RESET)"
+	@$(PYTHON) -m src \
+	--functions_definition $(FUNC_DEF) \
+	--input $(INPUT_F) \
+	--output $(OUTPUT_F) \
+	--visual
