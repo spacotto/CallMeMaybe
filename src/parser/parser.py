@@ -4,38 +4,31 @@ from typing import List, Dict, Any, Optional
 from pydantic import BaseModel, Field, ValidationError
 from src.utils import error, warning
 
-
 # ----------------------------------------------------------------------------
-# Pydantic Schemas for JSON Validation
+# Pydantic Schemas for JSON Validation (Relaxed for Edge Cases)
 # ----------------------------------------------------------------------------
-
 class FunctionProperty(BaseModel):
-    type: str
+    # Default to string if the school omitted the type
+    type: Optional[str] = "string"
     description: Optional[str] = None
-    enum: Optional[List[str]] = None
-
+    enum: Optional[List[Any]] = None
 
 class FunctionParameters(BaseModel):
-    type: str
-    properties: Dict[str, FunctionProperty]
-    required: List[str] = Field(default_factory=list)
-
+    # Some schemas forget to specify type: "object"
+    type: Optional[str] = "object"
+    # Use default_factory so it doesn't crash if properties is completely missing
+    properties: Optional[Dict[str, FunctionProperty]] = Field(default_factory=dict)
+    required: Optional[List[str]] = Field(default_factory=list)
 
 class FunctionDefinition(BaseModel):
-    name: str
+    name: str # The ONLY truly mandatory field
     description: Optional[str] = ""
-    parameters: Optional[FunctionParameters] = None
-
+    parameters: Optional[FunctionParameters] = Field(default_factory=FunctionParameters)
 
 # ----------------------------------------------------------------------------
 # The Pydantic-Validated Parser Class
 # ----------------------------------------------------------------------------
-
 class SchemaParser(BaseModel):
-    """
-    Inheriting from BaseModel ensures that whenever SchemaParser is instantiated,
-    the file_path is strictly validated as a string.
-    """
     file_path: str = Field(..., description="Path to the functions definition JSON file")
 
     def load_functions(self) -> List[Dict[str, Any]]:
@@ -53,19 +46,15 @@ class SchemaParser(BaseModel):
 
             valid_functions: List[Dict[str, Any]] = []
 
-            # Pydantic physically enforces the schema on every dictionary
             for idx, func_dict in enumerate(raw_data):
-
                 try:
-                    # If this succeeds, the dictionary perfectly matches the required structure
                     validated_func = FunctionDefinition(**func_dict)
-
-                    # We dump it back to a dictionary to pass to the engine
-                    # exclude_none=True removes empty fields to keep the prompt clean
                     valid_functions.append(validated_func.model_dump(exclude_none=True))
 
                 except ValidationError as ve:
-                    warning(f"Skipping malformed function at index {idx}: {ve.errors()[0]['msg']}")
+                    missing_field = ve.errors()[0].get('loc', ['Unknown'])[0]
+                    error_msg = ve.errors()[0].get('msg', 'Validation error')
+                    warning(f"Skipping function at index {idx}: Field '{missing_field}' -> {error_msg}")
                     continue
 
             return valid_functions
@@ -73,7 +62,6 @@ class SchemaParser(BaseModel):
         except json.JSONDecodeError as e:
             error(f"Failed to parse JSON schema: Syntax error at {e}")
             return []
-
-       except Exception as e:
+        except Exception as e:
             error(f"Unexpected I/O error reading schema: {e}")
             return []

@@ -7,11 +7,29 @@ from src.parser import SchemaParser
 from src.utils import Formatter, error, warning
 
 def main() -> None:
-    # 1. Catch the CLI arguments sent by the Makefile
+
+    # 1. Catch the CLI arguments sent by the Makefile or use README defaults
     cli_parser = argparse.ArgumentParser(description="Constrained Decoding LLM Engine")
-    cli_parser.add_argument("--functions_definition", type=str, required=True, help="Path to schema JSON")
-    cli_parser.add_argument("--input", type=str, required=True, help="Path to input prompts JSON")
-    cli_parser.add_argument("--output", type=str, required=True, help="Path to save generated JSON results")
+
+    cli_parser.add_argument(
+        "--functions_definition",
+        type=str,
+        default="data/input/functions_definition.json",
+        help="Path to schema JSON (default: data/input/functions_definition.json)"
+    )
+    cli_parser.add_argument(
+        "--input",
+        type=str,
+        default="data/input/function_calling_tests.json",
+        help="Path to input prompts JSON (default: data/input/function_calling_tests.json)"
+    )
+    cli_parser.add_argument(
+        "--output",
+        type=str,
+        default="data/output/function_calls.json",
+        help="Path to save generated JSON results (default: data/output/function_calls.json)"
+    )
+
     args = cli_parser.parse_args()
 
     print(Formatter.apply('bold', 'cyan', "\n⏳ Initializing Constrained Decoder Engine..."))
@@ -26,7 +44,7 @@ def main() -> None:
         return
 
     # 2. Load the dynamic schema specified by the Makefile
-    schema_parser = SchemaParser(args.functions_definition)
+    schema_parser = SchemaParser(file_path=args.functions_definition)
     functions_schema = schema_parser.load_functions()
 
     if not functions_schema:
