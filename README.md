@@ -42,12 +42,17 @@ To **prevent the core decoding engine from becoming tightly coupled to specific 
 
 ---
 
-### Engine
+### Engine: Vectorised Tensor Execution
 
-**Zero-Dependency Argmax Evaluation:** Per the strict pedagogical constraints of the subject, external tensor libraries (such as `torch` or `numpy`) are forbidden. Rather than offloading the logit sorting to a C++ backend, the constrained decoding loop calculates the `argmax` over the ~150,000-token vocabulary using Python standard library routines (`max(range(), key=...)`). This guarantees the project remains entirely self-contained while still executing the masking loop efficiently on standard CPU hardware.
+**C-Compiled Logit Masking (NumPy):** While heavy machine learning frameworks like PyTorch and Hugging Face are strictly forbidden by the pedagogical constraints, the engine leverages `numpy` to handle the massive array operations required for real-time inference. By casting the ~150,000-token vocabulary logits into an `np.ndarray`, the state machine applies vectorised mathematical masking (crushing illegal token probabilities to `-np.inf`). This bypasses the extreme latency of native Python `for` loops, allowing the `np.argmax` evaluation to execute in milliseconds on standard CPU hardware.
 
-**Deterministic Constrained Decoding:** The most critical architectural decision in this repository is the shift from *probabilistic generation* to *deterministic state-machine execution*. 
-Instead of relying on fragile prompt engineering ("Please only output valid JSON! Make no mistakes!"), the engine physically intercepts the model's neural network outputs (logits) during every step of the autoregressive loop. By evaluating the currently generated string prefix against a strict grammatical ruleset, the engine dynamically applies a `-math.inf` mask to any token that would violate the required JSON schema. This mathematical override completely strips the LLM of its ability to hallucinate invalid structural characters, ensuring 100% compliance with downstream `json.loads()` parsers.
+**Deterministic Constrained Decoding:** The most critical architectural decision in this project is the shift from *probabilistic generation* to *deterministic state-machine execution*. Instead of relying on fragile prompt engineering ("Please only output valid JSON! Make no mistakes!"), the engine physically intercepts the neural network's outputs (logits) during every step of the autoregressive loop. By dynamically toggling allowed character sets based on whether the generation cursor is inside or outside a string literal, the engine strips the LLM of its ability to hallucinate conversational padding or illegal structural characters, ensuring 100% compliance with downstream `json.loads()` parsers.
+
+### Parser: Strict Runtime Validation via Pydantic
+
+To fulfil the requirement for data validation, the `SchemaParser` and its underlying data structures are built entirely upon `pydantic.BaseModel`. 
+
+**Deterministic I/O Checking:** Rather than relying on `isinstance()` checks, the target `functions_definition.json` file is passed through a hierarchy of Pydantic models (`FunctionDefinition`, `FunctionParameters`, `FunctionProperty`). This mathematically guarantees that the schemas fed into the LLM prompt exactly match the required structural anatomy. Furthermore, the `SchemaParser` class itself validates its own initialisation variables, ensuring that missing files or invalid data types instantly trigger safe, graceful fallback errors rather than fatal pipeline crashes during evaluation.
 
 ## Performance analysis: Accuracy, Speed, and Reliability
 
