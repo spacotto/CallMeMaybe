@@ -1,9 +1,10 @@
-import math
+import numpy as np
 from typing import List, Dict, Any, Set
 
 from src.tokenizer import Tokenizer
 from src.formatter import Formatter, ModelFormat
 from llm_sdk import Small_LLM_Model
+
 
 class ConstrainedDecoder:
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
@@ -14,18 +15,20 @@ class ConstrainedDecoder:
         self.sdk = Small_LLM_Model(model_name=model_name)
         self.tokenizer = Tokenizer()
 
-        # Determine format type automatically based on the model target
         if "qwen" in model_name.lower() or "smol" in model_name.lower():
             self.formatter = Formatter(format_type=ModelFormat.CHATML)
         else:
             self.formatter = Formatter(format_type=ModelFormat.INSTRUCT)
 
-    def generate_function_call(self, user_prompt: str,
-                               functions: List[Dict[str, Any]],
-                               max_new_tokens: int = 120) -> str:
+    def generate_function_call(
+        self,
+        user_prompt: str,
+        functions: List[Dict[str, Any]],
+        max_new_tokens: int = 120
+    ) -> str:
         """
         Executes the autoregressive generation loop, forcing the model
-        to emit a valid, schema-compliant JSON structure.
+        to emit a valid, schema-compliant JSON structure using NumPy optimizations.
         """
         primed_prompt = self.formatter.build_function_prompt(user_prompt, functions)
         input_ids = self.tokenizer.encode(primed_prompt)
@@ -39,9 +42,11 @@ class ConstrainedDecoder:
             current_prefix = self.tokenizer.decode(generated_ids)
             allowed_chars = self._get_allowed_next_characters(current_prefix)
 
+            # Apply the constraint mask and return a highly optimized NumPy array
             masked_logits = self._apply_constraint_mask(raw_logits, allowed_chars)
 
-            next_token_id = max(range(len(masked_logits)), key=masked_logits.__getitem__)
+            # C-compiled NumPy argmax is significantly faster than standard Python
+            next_token_id = int(np.argmax(masked_logits))
             generated_ids.append(next_token_id)
 
             new_prefix = self.tokenizer.decode(generated_ids)
@@ -52,10 +57,7 @@ class ConstrainedDecoder:
         return self.tokenizer.decode(generated_ids)
 
     def _is_complete_json(self, text: str) -> bool:
-        """
-        Tracks bracket depth to definitively trigger loop termination
-        the millisecond the root JSON object closes.
-        """
+        """Tracks bracket depth to definitively trigger loop termination."""
         if not text or "{" not in text:
             return False
 
@@ -85,11 +87,7 @@ class ConstrainedDecoder:
         return False
 
     def _get_allowed_next_characters(self, current_prefix: str) -> Set[str]:
-        """
-        Evaluates the generated prefix using a strict JSON state machine.
-        Toggles allowed character sets based on whether the generation cursor
-        is currently inside or outside a string literal.
-        """
+        """Toggles allowed character sets based on string literal state."""
         if not current_prefix.strip():
             return {"{"}
 
@@ -110,20 +108,26 @@ class ConstrainedDecoder:
         else:
             return set('{}[]:,"0123456789 \n\r\ttruefalsenull')
 
-    def _apply_constraint_mask(self, logits: List[float], allowed_chars: Set[str]) -> List[float]:
+    def _apply_constraint_mask(self, logits: List[float], allowed_chars: Set[str]) -> np.ndarray:
         """
-        Scans every token in the tokenizer vocabulary. If a token's character
-        representation breaks syntax progression, its logit is crushed to -inf.
+        Converts logits to a NumPy array and applies -np.inf to illegal tokens.
         """
-        masked_logits = list(logits)
+        # Convert to a fast NumPy array
+        logits_array = np.array(logits, dtype=np.float32)
 
+        # Collect indices of tokens that violate the allowed characters
+        invalid_indices = []
         for token_id, token_str in self.id_to_token.items():
             actual_str = token_str.replace("Ġ", " ")
 
             if actual_str and not all(char in allowed_chars for char in actual_str):
-                masked_logits[token_id] = -math.inf
+                invalid_indices.append(token_id)
 
-        return masked_logits
+        # Vectorized masking: Crush all invalid token probabilities instantly
+        if invalid_indices:
+            logits_array[invalid_indices] = -np.inf
+
+        return logits_array
 
     @property
     def id_to_token(self) -> Dict[int, str]:
