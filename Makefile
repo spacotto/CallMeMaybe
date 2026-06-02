@@ -48,7 +48,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help visual test campus-init
+       	help test campus-init visual json
 
 # ------------------------------------------------------------
 #  Default target
@@ -69,6 +69,8 @@ help:
 	@$(ECHO) ""
 	@$(ECHO) "     $(CYAN)campus-init$(RESET)  Set up environment in /tmp"
 	@$(ECHO) "     $(CYAN)test$(RESET)         Run pytest test set"
+	@$(ECHO) "     $(CYAN)visual$(RESET)       Run generation with live state-machine visualization"
+	@$(ECHO) "     $(CYAN)json$(RESET)         Live auto-reloading JSON dashboard"
 	@$(ECHO) ""
 
 # ------------------------------------------------------------
@@ -173,13 +175,21 @@ campus-init:
 	@$(ECHO) "$(CYAN)>>> Campus environment ready!$(RESET)"
 
 # ------------------------------------------------------------
-#  visual — test the project with pytest framework 
+#  visual — Visualise the generation process 
 # ------------------------------------------------------------
 
 visual:
-	@$(ECHO) "$(YELLOW)>>> Launching visualiser...$(RESET)"
+	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
 	@$(PYTHON) -m src \
 	--functions_definition $(FUNC_DEF) \
 	--input $(INPUT_F) \
 	--output $(OUTPUT_F) \
-	--visual
+	--verbose
+
+# ------------------------------------------------------------
+#  json — Visualise the output JSON file
+# ------------------------------------------------------------
+
+json:
+	@$(ECHO) "$(YELLOW)>>> Launching JSON output visualiser...$(RESET)"
+	@$(PYTHON) -m src.visualizer.visualizer --input $(OUTPUT_F)

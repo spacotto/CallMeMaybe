@@ -1,33 +1,12 @@
 import json
 import os
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any
 from pydantic import BaseModel, Field, ValidationError
+
+from src.parser.models import FunctionDefinition
 from src.utils import error, warning
 
-# ----------------------------------------------------------------------------
-# Pydantic Schemas for JSON Validation (Relaxed for Edge Cases)
-# ----------------------------------------------------------------------------
-class FunctionProperty(BaseModel):
-    # Default to string if the school omitted the type
-    type: Optional[str] = "string"
-    description: Optional[str] = None
-    enum: Optional[List[Any]] = None
 
-class FunctionParameters(BaseModel):
-    # Some schemas forget to specify type: "object"
-    type: Optional[str] = "object"
-    # Use default_factory so it doesn't crash if properties is completely missing
-    properties: Optional[Dict[str, FunctionProperty]] = Field(default_factory=dict)
-    required: Optional[List[str]] = Field(default_factory=list)
-
-class FunctionDefinition(BaseModel):
-    name: str # The ONLY truly mandatory field
-    description: Optional[str] = ""
-    parameters: Optional[FunctionParameters] = Field(default_factory=FunctionParameters)
-
-# ----------------------------------------------------------------------------
-# The Pydantic-Validated Parser Class
-# ----------------------------------------------------------------------------
 class SchemaParser(BaseModel):
     file_path: str = Field(..., description="Path to the functions definition JSON file")
 

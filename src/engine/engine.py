@@ -3,6 +3,7 @@ from typing import List, Dict, Any, Set
 
 from src.tokenizer import Tokenizer
 from src.formatter import Formatter, ModelFormat
+from src.utils import Formatter as clr
 from llm_sdk import Small_LLM_Model
 
 
@@ -20,41 +21,79 @@ class ConstrainedDecoder:
         else:
             self.formatter = Formatter(format_type=ModelFormat.INSTRUCT)
 
-    def generate_function_call(
-        self,
-        user_prompt: str,
-        functions: List[Dict[str, Any]],
-        max_new_tokens: int = 120
-    ) -> str:
+    def generate_function_call(self, user_prompt: str,
+                               functions: List[Dict[str, Any]],
+                               max_new_tokens: int = 120,
+                               verbose: bool = False) -> str:
         """
-        Executes the autoregressive generation loop, forcing the model
-        to emit a valid, schema-compliant JSON structure using NumPy optimizations.
+        Executes the autoregressive generation loop.
+        If verbose is True, prints a real-time visualization of the state machine.
         """
         primed_prompt = self.formatter.build_function_prompt(user_prompt, functions)
         input_ids = self.tokenizer.encode(primed_prompt)
 
         generated_ids: List[int] = []
 
-        for _ in range(max_new_tokens):
+        if verbose:
+            print(clr.apply(None, 'gray', "-" * 70))
+
+        for step in range(max_new_tokens):
             current_sequence = input_ids + generated_ids
             raw_logits = self.sdk.get_logits_from_input_ids(current_sequence)
 
             current_prefix = self.tokenizer.decode(generated_ids)
+
+            # --- 1. State Tracking ---
+            in_string = self._is_in_string(current_prefix) # Assuming you abstracted this check
             allowed_chars = self._get_allowed_next_characters(current_prefix)
 
-            # Apply the constraint mask and return a highly optimized NumPy array
+            # --- 2. Mask & Argmax ---
             masked_logits = self._apply_constraint_mask(raw_logits, allowed_chars)
-
-            # C-compiled NumPy argmax is significantly faster than standard Python
             next_token_id = int(np.argmax(masked_logits))
             generated_ids.append(next_token_id)
+
+            # --- 3. The Mindful Print (Bonus Visualization) ---
+            if verbose:
+                state_str = "Inside String" if in_string else "Structural JSON"
+                # Safely escape newlines so they don't break the terminal layout
+                token_str = self.tokenizer.decode([next_token_id]).replace('\n', '\\n').replace('\r', '\\r')
+
+                # Build the formatted string
+                line = (
+                    clr.apply('bold', 'blue', f"[{step+1:03d}] ") +
+                    clr.apply(None, 'cyan', f"State: ") + clr.apply('bold', 'white', f"{state_str:<16}") +
+                    clr.apply(None, 'gray', " | ") +
+                    clr.apply(None, 'yellow', f"Mask: ") + clr.apply('bold', 'yellow', f"{len(allowed_chars):02d} allowed chars") +
+                    clr.apply(None, 'gray', " | ") +
+                    clr.apply(None, 'lime', f"Token Generated: ") + clr.apply('bold', 'lime', f"'{token_str}'")
+                )
+
+                # \r brings the cursor to the start of the line.
+                # \033[K clears everything from the cursor to the end of the line.
+                # end="" prevents Python from automatically moving to the next line.
+                print(f"\r\033[K{line}", end="", flush=True)
 
             new_prefix = self.tokenizer.decode(generated_ids)
 
             if self._is_complete_json(new_prefix) or next_token_id == self.tokenizer.token_to_id.get("<|im_end|>", -1):
+                if verbose:
+                    print(clr.apply(None, 'gray', "\n" + "-" * 70))
                 break
 
         return self.tokenizer.decode(generated_ids)
+
+    # (Optional) Extract the in_string logic into a tiny helper for cleaner code
+    def _is_in_string(self, text: str) -> bool:
+        in_string = False
+        escape = False
+        for char in text:
+            if escape:
+                escape = False; continue
+            if char == "\\":
+                escape = True; continue
+            if char == '"':
+                in_string = not in_string
+        return in_string
 
     def _is_complete_json(self, text: str) -> bool:
         """Tracks bracket depth to definitively trigger loop termination."""

@@ -8,7 +8,7 @@ from src.utils import Formatter, error, warning
 
 def main() -> None:
 
-    # 1. Catch the CLI arguments sent by the Makefile or use README defaults
+    # 1. Catch the CLI arguments sent by the Makefile or use defaults
     cli_parser = argparse.ArgumentParser(description="Constrained Decoding LLM Engine")
 
     cli_parser.add_argument(
@@ -31,20 +31,21 @@ def main() -> None:
     )
 
     cli_parser.add_argument(
-        "--visual",
+        "--verbose",
         action="store_true",
-        help="Automatically launch the visualizer dashboard after generation completes"
+        help="Print real-time visualization of the generation state machine"
     )
-
     args = cli_parser.parse_args()
 
-    print(Formatter.apply('bold', 'cyan', "\n⏳ Initializing Constrained Decoder Engine..."))
+    print(Formatter.apply('bold', 'yellow',
+                          ">>> Initializing Constrained Decoder Engine..."))
     start_time = time.time()
 
     try:
         engine = ConstrainedDecoder(model_name="Qwen/Qwen3-0.6B")
         elapsed = time.time() - start_time
-        print(Formatter.apply('bold', 'green', f"✅ Engine loaded in {elapsed:.2f} seconds.\n"))
+        txt = f">>> Engine loaded in {elapsed:.2f} seconds.\n"
+        print(Formatter.apply('bold', 'cyan', txt))
     except Exception as e:
         error(f"Failed to load model architecture: {e}")
         return
@@ -72,14 +73,16 @@ def main() -> None:
         prompt = test.get("prompt") if isinstance(test, dict) else str(test)
 
         # This print statement confirms the loop is running correctly
-        print(Formatter.apply('bold', 'blue', f"👤 Processing Prompt [{idx+1}/{len(test_cases)}]: ") + prompt[:60] + "...")
+        txt = f">>> Processing Prompt [{idx+1}/{len(test_cases)}]: "
+        print(Formatter.apply('bold', 'yellow', txt) + prompt)
 
         try:
             generation_start = time.time()
             json_result_str = engine.generate_function_call(
                 user_prompt=prompt,
                 functions=functions_schema,
-                max_new_tokens=120
+                max_new_tokens=120,
+                verbose=args.verbose
             )
 
             # Cast the guaranteed JSON string back into a Python dictionary
@@ -96,7 +99,8 @@ def main() -> None:
             })
 
             gen_time = time.time() - generation_start
-            print(Formatter.apply('bold', 'lime', f"✅ Generated flawlessly in {gen_time:.2f}s\n"))
+            txt = f">>> Valid JSON genrated in {gen_time:.2f}s\n"
+            print(Formatter.apply('bold', 'cyan', txt))
 
         except Exception as e:
             error(f"Generation loop failed on prompt {idx+1}: {e}")
@@ -106,12 +110,9 @@ def main() -> None:
     with open(args.output, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=4)
 
-    print(Formatter.apply('bold', 'magenta', f"💾 All results successfully saved to {args.output}\n"))
+    txt = f">>> All results successfully saved to {args.output} 💾\n"
+    print(Formatter.apply('bold', 'cyan', txt))
 
-    # 6. Launch the visualizer if the flag was passed
-    if args.visual:
-        from src.visualizer.visualizer import render_dashboard
-        render_dashboard(args.output)
 
 if __name__ == "__main__":
     main()

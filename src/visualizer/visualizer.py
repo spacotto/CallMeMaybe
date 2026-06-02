@@ -16,9 +16,9 @@ def render_dashboard(input_path: str) -> None:
         error(f"Failed to load results JSON: {e}")
         return
 
-    print(Formatter.apply('bold', 'cyan', "\n" + "="*80))
-    print(Formatter.apply('bold', 'cyan', " 📊 CONSTRAINED DECODING EVALUATION DASHBOARD"))
-    print(Formatter.apply('bold', 'cyan', "="*80 + "\n"))
+    print(Formatter.apply('bold', 'white', "\n" + "="*80))
+    print(Formatter.apply('bold', 'cyan', " JSON OUTPUT VISUALISATION"))
+    print(Formatter.apply('bold', 'white', "="*80 + "\n"))
 
     success_count = 0
 
