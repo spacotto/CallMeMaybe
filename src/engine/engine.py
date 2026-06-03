@@ -78,46 +78,49 @@ class ConstrainedDecoder:
         in_string = self._is_in_string(current_prefix)
 
         if not in_string:
-            allowed_chars_viz = set('{}[]:,"0123456789 \n\r\ttruefalsenull')
 
-            # --- FIX 1: Anti-Nesting Trap ---
-            # Prevent the model from opening nested objects or arrays inside arguments.
-            if '"arguments"' in current_prefix:
-                allowed_chars_viz.discard('{')
-                allowed_chars_viz.discard('[')
-                # Exception: Allow the very first '{' to open the arguments dictionary itself.
-                if re.search(r'"arguments"\s*:\s*$', current_prefix):
-                    allowed_chars_viz.add('{')
+            # --- FIX 1: First Token Trap ---
+            # If the string is empty, mathematically FORCE the model to type `{`
+            if not current_prefix.strip():
+                allowed_chars_viz = {'{', ' ', '\n', '\r', '\t'}
+            else:
+                allowed_chars_viz = set('{}[]:,"0123456789 \n\r\ttruefalsenull')
+
+                # --- FIX 2: Anti-Nesting Trap ---
+                if '"parameters"' in current_prefix:
+                    allowed_chars_viz.discard('{')
+                    allowed_chars_viz.discard('[')
+                    if re.search(r'"parameters"\s*:\s*$', current_prefix):
+                        allowed_chars_viz.add('{')
 
             for t_id, t_str in self.tokenizer.id_to_token.items():
                 s = t_str.replace("Ġ", " ")
 
-                # Sandboxing: Block empty tokens and illegal chars
                 if not s or not all(c in allowed_chars_viz for c in s):
                     invalid_ids.append(t_id)
                     continue
 
-                # Sandboxing: Force clean quote transitions
                 if '"' in s and (s.count('"') > 1 or not s.endswith('"')):
                     invalid_ids.append(t_id)
                     continue
 
-                # Sandboxing: Ban the alphabet exploit
-                letters = re.findall(r'[a-z]+', s.lower())
-                banned_word = False
-                for word in letters:
-                    if not any(valid.startswith(word) or word in valid for valid in ['true', 'false', 'null']):
-                        banned_word = True
-                        break
-                if banned_word:
-                    invalid_ids.append(t_id)
+                # Ban the alphabet exploit
+                if current_prefix.strip():
+                    letters = re.findall(r'[a-z]+', s.lower())
+                    banned_word = False
+                    for word in letters:
+                        if not any(valid.startswith(word) or word in valid for valid in ['true', 'false', 'null']):
+                            banned_word = True
+                            break
+                    if banned_word:
+                        invalid_ids.append(t_id)
 
         else:
             parts = current_prefix.rsplit('"', 1)
 
-            # --- FIX 2: Root-Only Trie Routing ---
-            # Apply the Trie ONLY if we are typing the "name" key BEFORE arguments are opened.
-            is_root_name = len(parts) > 1 and re.search(r'"name"\s*:\s*$', parts[0]) and '"arguments"' not in parts[0]
+            # --- FIX 3: Root-Only Trie Routing ---
+            # Apply the Trie ONLY if we are typing the "name" key BEFORE parameters are opened.
+            is_root_name = len(parts) > 1 and re.search(r'"name"\s*:\s*$', parts[0]) and '"parameters"' not in parts[0]
 
             if is_root_name:
                 current_name_prefix = parts[1]

@@ -1,7 +1,6 @@
-from typing import Optional
+from typing import Optional, Dict, Any
 from pydantic import BaseModel, Field
-from src.parser.models.function_parameters import FunctionParameters
-
+from src.parser.models.function_property import FunctionProperty
 
 class FunctionDefinition(BaseModel):
     """
@@ -9,4 +8,5 @@ class FunctionDefinition(BaseModel):
     """
     name: str
     description: Optional[str] = ""
-    parameters: Optional[FunctionParameters] = Field(default_factory=FunctionParameters)
+    parameters: Optional[Dict[str, FunctionProperty]] = Field(default_factory=dict)
+    returns: Optional[Dict[str, Any]] = None

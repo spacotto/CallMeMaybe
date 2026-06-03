@@ -24,23 +24,24 @@ def render_dashboard(input_path: str) -> None:
 
     for idx, item in enumerate(results):
         prompt = item.get("prompt", "Unknown Prompt")
-        call = item.get("function_call", {})
-
-        name = call.get("name", "MISSING_NAME")
-        args_dict = call.get("arguments", {})
 
         print(Formatter.apply('bold', 'blue', f"[{idx + 1:02d}] Prompt: ") + prompt)
 
-        if "error" in call:
-            print(Formatter.apply('bold', 'red', f" ├─ ❌ Generation Error: {call['error']}"))
+        if "error" in item:
+            print(Formatter.apply('bold', 'red', f" ├─ ❌ Generation Error: {item['error']}"))
         else:
             success_count += 1
+
+            # Read from the newly flattened schema directly
+            name = item.get("name", "MISSING_NAME")
+            args_dict = item.get("parameters", {})
+
             print(Formatter.apply(None, 'gray', f" ├─ Function : ") + Formatter.apply('bold', 'lime', name))
 
             if not args_dict:
-                print(Formatter.apply(None, 'gray', f" └─ Arguments: ") + Formatter.apply('bold', 'yellow', "{ } (Empty)"))
+                print(Formatter.apply(None, 'gray', f" └─ Parameters: ") + Formatter.apply('bold', 'yellow', "{ } (Empty)"))
             else:
-                print(Formatter.apply(None, 'gray', f" └─ Arguments: "))
+                print(Formatter.apply(None, 'gray', f" └─ Parameters: "))
                 arg_items = list(args_dict.items())
                 for i, (key, val) in enumerate(arg_items):
                     connector = "    └─" if i == len(arg_items) - 1 else "    ├─"

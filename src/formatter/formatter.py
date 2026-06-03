@@ -28,21 +28,22 @@ class Formatter:
         # Stringify the target JSON schema
         schema_str = json.dumps(functions, indent=2)
 
-        # Few-Shot System Instruction
+        # Few-Shot System Instruction - ONLY ask for name and parameters!
         system_instruction = (
-            "You are an expert logical data extraction engine.\n"
-            "You MUST respond with a single, valid JSON object containing the keys 'name' and 'arguments'.\n"
-            "Map the user's request to the correct function and extract the required arguments EXACTLY as defined in the schema.\n\n"
+            "You are a logical data extraction engine.\n"
+            "You MUST respond with a single, valid JSON object containing ONLY the keys 'name' and 'parameters'.\n"
+            "You MUST Map the user's request to the correct function and extract the parameters EXACTLY as defined in the schema.\n\n"
             f"AVAILABLE FUNCTIONS:\n{schema_str}\n\n"
             "--- EXAMPLES ---\n"
             "User: What is the sum of 10 and 20?\n"
-            "Output: {\"name\": \"fn_add_numbers\", \"arguments\": {\"a\": 10, \"b\": 20}}\n\n"
+            'Output: {"name": "fn_add_numbers", "parameters": {"a": 10.0, "b": 20.0}}\n\n'
             "User: Replace all numbers in 'test 123' with NUM.\n"
-            "Output: {\"name\": \"fn_substitute_string_with_regex\", \"arguments\": {\"source_string\": \"test 123\", \"regex\": \"[0-9]+\", \"replacement\": \"NUM\"}}\n\n"
-            "User: Greet Alice.\n"
-            "Output: {\"name\": \"fn_greet\", \"arguments\": {\"name\": \"Alice\"}}\n"
+            'Output: {"name": "fn_substitute_string_with_regex", "parameters": {"source_string": "test 123", "regex": "[0-9]+", "replacement": "NUM"}}\n\n'
+            "User: Greet shrek\n"
+            'Output: {"name": "fn_greet", "parameters": {"name": "shrek"}}\n'
             "----------------\n\n"
-            "Do NOT include any conversational text. Do NOT wrap the output in markdown blocks. Generate ONLY the raw JSON object."
+            "Do NOT include any conversational text.\n"
+            "Do NOT wrap the output in markdown blocks. Generate ONLY the raw JSON object."
         )
 
         # Apply the specific model's template
