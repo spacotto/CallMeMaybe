@@ -37,7 +37,7 @@ WHITE	:= \033[1;97m
 #  Additional commands
 # ------------------------------------------------------------
 
-ECHO	:= echo -e 
+ECHO	:= echo 
 FIND	:= /bin/find
 IGNORE	:= 2>/dev/null || true
 MV	:= /bin/mv
@@ -48,7 +48,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help test campus-init visual json
+       	help test campus-init clean-venv visual
 
 # ------------------------------------------------------------
 #  Default target
@@ -68,9 +68,9 @@ help:
 	@$(ECHO) " $(CYAN)BONUS RULES$(RESET)"
 	@$(ECHO) ""
 	@$(ECHO) "     $(CYAN)campus-init$(RESET)  Set up environment in /tmp"
+	@$(ECHO) "     $(CYAN)clean-venv$(RESET)   Remove the venv"
 	@$(ECHO) "     $(CYAN)test$(RESET)         Run pytest test set"
 	@$(ECHO) "     $(CYAN)visual$(RESET)       Run generation with live state-machine visualization"
-	@$(ECHO) "     $(CYAN)json$(RESET)         Live auto-reloading JSON dashboard"
 	@$(ECHO) ""
 
 # ------------------------------------------------------------
@@ -175,6 +175,17 @@ campus-init:
 	@$(ECHO) "$(CYAN)>>> Campus environment ready!$(RESET)"
 
 # ------------------------------------------------------------
+#  clean-venv — remove virtual environment
+# ------------------------------------------------------------
+
+clean-venv:
+	@$(ECHO) "$(YELLOW)>>> Cleaning venv and campus tmp files$(RESET)"
+	@$(RM) $(VENV)
+	@$(RM) "/tmp/$(USER)_callmemaybe_venv"
+	@$(RM) "/tmp/$(USER)_uv_cache"
+	@$(ECHO) "$(CYAN)>>> Done.$(RESET)"
+
+# ------------------------------------------------------------
 #  visual — Visualise the generation process 
 # ------------------------------------------------------------
 
@@ -185,11 +196,3 @@ visual:
 	--input $(INPUT_F) \
 	--output $(OUTPUT_F) \
 	--verbose
-
-# ------------------------------------------------------------
-#  json — Visualise the output JSON file
-# ------------------------------------------------------------
-
-json:
-	@$(ECHO) "$(YELLOW)>>> Launching JSON output visualiser...$(RESET)"
-	@$(PYTHON) -m src.visualizer.visualizer --input $(OUTPUT_F)

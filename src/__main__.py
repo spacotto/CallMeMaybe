@@ -10,6 +10,8 @@ from src.visualizer import Visualizer
 
 def main() -> None:
 
+    start = time.time()
+
     cli_parser = argparse.ArgumentParser(description="Constrained Decoding LLM Engine")
     cli_parser.add_argument("--functions_definition", type=str, default="data/input/functions_definition.json")
     cli_parser.add_argument("--input", type=str, default="data/input/function_calling_tests.json")
@@ -47,7 +49,6 @@ def main() -> None:
     for idx, test in enumerate(test_cases):
         prompt = test.get("prompt") if isinstance(test, dict) else str(test)
 
-        # Delegate Header Render
         Visualizer.print_prompt_start(idx + 1, len(test_cases), prompt)
 
         try:
@@ -111,8 +112,10 @@ def main() -> None:
     with open(args.output, 'w', encoding='utf-8') as f:
         json.dump(results, f, indent=4)
 
-    print(Formatter.apply('bold', 'cyan', f"\n 💾 All results successfully saved to {args.output}\n"))
-
+    txt = f"\n 💾 All results successfully saved to {args.output}"
+    print(Formatter.apply('bold', 'cyan', txt))
+    stopwatch = f' ⏳ Output generated in {time.time() - start:.1f}s\n'
+    print(Formatter.apply('bold', 'lime', stopwatch))
 
 if __name__ == "__main__":
     main()

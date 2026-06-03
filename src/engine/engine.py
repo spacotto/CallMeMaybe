@@ -19,6 +19,14 @@ class ConstrainedDecoder:
         else:
             self.formatter = Formatter(format_type=ModelFormat.INSTRUCT)
 
+        # Precompute the cleaned vocabulary ONCE
+        max_id = max(self.tokenizer.id_to_token.keys()) if self.tokenizer.id_to_token else 151643
+        self.vocab_size = max_id + 1
+        self.clean_vocab = [""] * self.vocab_size
+
+        for t_id, t_str in self.tokenizer.id_to_token.items():
+            self.clean_vocab[t_id] = t_str.replace("Ġ", " ")
+
     def generate_function_call(self, user_prompt: str,
                                functions: List[Dict[str, Any]],
                                max_new_tokens: int = 120,
@@ -85,8 +93,8 @@ class ConstrainedDecoder:
                     if re.search(r'"parameters"\s*:\s*$', current_prefix):
                         allowed_chars_viz.add('{')
 
-            for t_id, t_str in self.tokenizer.id_to_token.items():
-                s = t_str.replace("Ġ", " ")
+            for t_id in range(self.vocab_size):
+                s = self.clean_vocab[t_id]
 
                 if not s or not all(c in allowed_chars_viz for c in s):
                     invalid_ids.append(t_id)
@@ -114,8 +122,8 @@ class ConstrainedDecoder:
             if is_root_name:
                 current_name_prefix = parts[1]
                 allowed_chars_viz = name_trie.get_allowed_next_chars(current_name_prefix)
-                for t_id, t_str in self.tokenizer.id_to_token.items():
-                    s = t_str.replace("Ġ", " ")
+                for t_id in range(self.vocab_size):
+                    s = self.clean_vocab[t_id]
                     if not s or not name_trie.is_valid_path(current_name_prefix + s):
                         invalid_ids.append(t_id)
             else:
@@ -141,8 +149,8 @@ class ConstrainedDecoder:
                     if phrase:
                         quoted_phrases.add(phrase)
 
-                for t_id, t_str in self.tokenizer.id_to_token.items():
-                    s = t_str.replace("Ġ", " ")
+                for t_id in range(self.vocab_size):
+                    s = self.clean_vocab[t_id]
                     if not s or not all(c in allowed_chars_viz for c in s):
                         invalid_ids.append(t_id)
                         continue
