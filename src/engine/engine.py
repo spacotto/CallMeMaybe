@@ -7,7 +7,7 @@ from src.formatter import Formatter, ModelFormat
 from llm_sdk import Small_LLM_Model
 
 from src.engine.trie import SchemaTrie
-from src.visualizer import Visualizer  # Inject the UI Layer
+from src.visualizer import Visualizer
 
 class ConstrainedDecoder:
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
@@ -35,7 +35,8 @@ class ConstrainedDecoder:
         for step in range(max_new_tokens):
             current_prefix = self.tokenizer.decode(generated_ids)
 
-            invalid_ids, allowed_chars = self._get_mask(current_prefix, name_trie)
+            # Pass the user_prompt into the mask for dynamic substring extraction
+            invalid_ids, allowed_chars = self._get_mask(current_prefix, name_trie, user_prompt)
 
             current_sequence = input_ids + generated_ids
             raw_logits = self.sdk.get_logits_from_input_ids(current_sequence)
@@ -65,7 +66,8 @@ class ConstrainedDecoder:
     # Core Masking Logic
     # -----------------------------------------------------------------------
 
-    def _get_mask(self, current_prefix: str, name_trie: SchemaTrie) -> Tuple[List[int], Set[str]]:
+    def _get_mask(self, current_prefix: str, name_trie: SchemaTrie,
+                  user_prompt: str) -> Tuple[List[int], Set[str]]:
         invalid_ids = []
         allowed_chars_viz = set()
 
@@ -118,6 +120,23 @@ class ConstrainedDecoder:
                         invalid_ids.append(t_id)
             else:
                 allowed_chars_viz = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\')
+
+                # Identify which parameter value we are currently typing
+                param_match = re.search(r'"([^"]+)"\s*:\s*"([^"]*)$', current_prefix)
+                active_key = param_match.group(1) if param_match else None
+                current_val = param_match.group(2) if param_match else ""
+
+                # Pre-compute valid target phrases from the prompt
+                prompt_lower = user_prompt.lower()
+                prompt_words = set(re.findall(r'\b\w+\b', prompt_lower))
+
+                # Robust extraction of quoted phrases (handles apostrophes inside double quotes)
+                quoted_phrases = set()
+                for match in re.finditer(r'"([^"]+)"|\'([^\']+)\'', prompt_lower):
+                    phrase = match.group(1) if match.group(1) else match.group(2)
+                    if phrase:
+                        quoted_phrases.add(phrase)
+
                 for t_id, t_str in self.tokenizer.id_to_token.items():
                     s = t_str.replace("Ġ", " ")
                     if not s or not all(c in allowed_chars_viz for c in s):
@@ -125,6 +144,36 @@ class ConstrainedDecoder:
                         continue
                     if '"' in s and (s.count('"') > 1 or not s.endswith('"')):
                         invalid_ids.append(t_id)
+                        continue
+
+                    # --- THE EXTRACTIVE MASK & PREMATURE CLOSURE TRAP ---
+                    if active_key in ["name", "s", "source_string"]:
+                        s_val = s[:-1] if s.endswith('"') else s
+
+                        if s_val:
+                            proposed_val = current_val + s_val
+                            # 1. Must be a valid substring of the prompt
+                            if proposed_val.lower() not in prompt_lower:
+                                invalid_ids.append(t_id)
+                                continue
+
+                        # 2. Premature Closure Trap
+                        if s.endswith('"'):
+                            final_val = (current_val + s_val).lower()
+                            is_valid_closure = False
+
+                            if final_val:
+                                if active_key in ["name", "s"]:
+                                    # Must form a complete word or complete quoted string
+                                    if final_val in prompt_words or final_val in quoted_phrases:
+                                        is_valid_closure = True
+                                elif active_key == "source_string":
+                                    # Must exactly match a quoted phrase or the entire prompt
+                                    if final_val in quoted_phrases or final_val == prompt_lower:
+                                        is_valid_closure = True
+
+                            if not is_valid_closure:
+                                invalid_ids.append(t_id)
 
         return invalid_ids, allowed_chars_viz
 

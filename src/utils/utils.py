@@ -82,9 +82,9 @@ class Formatter:
 
 def error(text: str) -> None:
     """Format text for error messages."""
-    print(Formatter.apply('bold', 'magenta', f'>>> ERROR! {text}'))
+    print(Formatter.apply('bold', 'magenta', f'\n>>> ERROR! {text}'))
 
 
 def warning(text: str) -> None:
     """Format text for warning messages."""
-    print(Formatter.apply('bold', 'yellow', f'>>> WARNING! {text}'))
+    print(Formatter.apply('bold', 'yellow', f'\n>>> WARNING! {text}'))

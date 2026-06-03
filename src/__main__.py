@@ -2,10 +2,11 @@ import time
 import argparse
 import json
 import os
+
 from src.engine import ConstrainedDecoder
 from src.parser import SchemaParser
 from src.utils import Formatter, error
-from src.visualizer import Visualizer  # Inject UI layer
+from src.visualizer import Visualizer
 
 def main() -> None:
 
