@@ -60,7 +60,7 @@ class Visualizer:
         name = item.get("name", "MISSING_NAME")
         args_dict = item.get("parameters", {})
 
-        print(Formatter.apply(None, 'gray', f" ├─ Function : ") + Formatter.apply('bold', 'lime', name))
+        print(Formatter.apply(None, 'gray', f" ├─ Name: ") + Formatter.apply('bold', 'lime', name))
 
         if not args_dict:
             print(Formatter.apply(None, 'gray', f" └─ Parameters: ") + Formatter.apply('bold', 'yellow', "{ } (Empty)"))

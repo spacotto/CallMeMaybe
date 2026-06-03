@@ -119,7 +119,11 @@ class ConstrainedDecoder:
                     if not s or not name_trie.is_valid_path(current_name_prefix + s):
                         invalid_ids.append(t_id)
             else:
-                allowed_chars_viz = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\')
+                # Add regex syntax characters: []{}().*+^$|
+                allowed_chars_viz = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\()[]{}*+^$|')
+
+                # Identify which parameter value we are currently typing
+                param_match = re.search(r'"([^"]+)"\s*:\s*"([^"]*)$', current_prefix)
 
                 # Identify which parameter value we are currently typing
                 param_match = re.search(r'"([^"]+)"\s*:\s*"([^"]*)$', current_prefix)
