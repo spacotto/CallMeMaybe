@@ -37,7 +37,7 @@ WHITE	:= \033[1;97m
 #  Additional commands
 # ------------------------------------------------------------
 
-ECHO	:= echo 
+ECHO	:= echo -e
 FIND	:= /bin/find
 IGNORE	:= 2>/dev/null || true
 MV	:= /bin/mv
