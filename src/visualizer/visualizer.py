@@ -70,32 +70,3 @@ class Visualizer:
             for i, (key, val) in enumerate(arg_items):
                 connector = "    └─" if i == len(arg_items) - 1 else "    ├─"
                 print(Formatter.apply(None, 'gray', f"{connector} {key}: ") + Formatter.apply(None, 'white', str(val)))
-
-
-# -------------------------------------------------------------------------
-# Standalone execution support for rendering existing JSON files
-# -------------------------------------------------------------------------
-def render_dashboard(input_path: str) -> None:
-    if not os.path.exists(input_path):
-        error(f"Results file not found at: {input_path}. Run the engine first!")
-        return
-    try:
-        with open(input_path, 'r', encoding='utf-8') as f:
-            results = json.load(f)
-    except Exception as e:
-        error(f"Failed to load results JSON: {e}")
-        return
-
-    print(Formatter.apply('bold', 'white', "\n" + "="*80))
-    print(Formatter.apply('bold', 'cyan', " JSON OUTPUT VISUALISATION"))
-    print(Formatter.apply('bold', 'white', "="*80 + "\n"))
-
-    for item in results:
-        Visualizer.print_json_render(item)
-        print()
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Constrained Decoding Results Visualizer")
-    parser.add_argument("--input", type=str, default="data/output/function_calls.json")
-    args = parser.parse_args()
-    render_dashboard(args.input)
