@@ -19,12 +19,12 @@ class ConstrainedDecoder:
         else:
             self.formatter = Formatter(format_type=ModelFormat.INSTRUCT)
 
-        # 1. Base Vocabulary Setup
+        # Base Vocabulary Setup
         max_id = max(self.tokenizer.id_to_token.keys()) if self.tokenizer.id_to_token else 151643
         self.vocab_size = max_id + 1
         self.clean_vocab = [""] * self.vocab_size
 
-        # 2. PURE VECTORIZATION: Precompute structural and safety masks ONCE
+        # PURE VECTORIZATION: Precompute structural and safety masks ONCE
         self.struct_mask = np.zeros(self.vocab_size, dtype=bool)
         self.wildcard_string_mask = np.zeros(self.vocab_size, dtype=bool)
         self.safe_quote_mask = np.ones(self.vocab_size, dtype=bool)
@@ -43,17 +43,14 @@ class ConstrainedDecoder:
 
             t_chars = set(s)
 
-            # Precompute subsets
             if t_chars.issubset(struct_chars):
                 self.struct_mask[t_id] = True
             if t_chars.issubset(wildcard_chars):
                 self.wildcard_string_mask[t_id] = True
 
-            # Precompute quote safety
             if '"' in s and (s.count('"') > 1 or not s.endswith('"')):
                 self.safe_quote_mask[t_id] = False
 
-            # Precompute boolean/null overlap safety
             letters = word_pattern.findall(s.lower())
             for word in letters:
                 if not any(valid.startswith(word) or word in valid for valid in ['true', 'false', 'null']):
@@ -62,73 +59,127 @@ class ConstrainedDecoder:
 
         self.param_pattern = re.compile(r'"([^"]+)"\s*:\s*"([^"]*)$')
 
-    def generate_function_call(self, user_prompt: str,
-                               functions: List[Dict[str, Any]],
-                               max_new_tokens: int = 120,
-                               verbose: bool = False) -> str:
-
-        primed_prompt = self.formatter.build_function_prompt(user_prompt, functions)
-
-        escaped_prompt = json.dumps(user_prompt)[1:-1]
-        boilerplate_start = f'{{"prompt": "{escaped_prompt}", "name": "'
-
-        input_ids = self.tokenizer.encode(primed_prompt)
-        generated_ids: List[int] = self.tokenizer.encode(boilerplate_start)
-
+    def generate_batch(self, prompts: List[str],
+                       functions: List[Dict[str, Any]],
+                       max_new_tokens: int = 120,
+                       verbose: bool = False) -> List[str]:
+        """
+        Processes multiple prompts simultaneously using Active-State Batching.
+        Safely bypasses SDK 2D limitations while retaining Numpy matrix acceleration.
+        """
+        batch_size = len(prompts)
         valid_names = [f["name"] for f in functions]
         name_trie = SchemaTrie(valid_names)
 
-        prompt_lower = user_prompt.lower()
-        prompt_words = set(re.findall(r'\b\w+\b', prompt_lower))
-        quoted_phrases = set()
-        for match in re.finditer(r'"([^"]+)"|\'([^\']+)\'', prompt_lower):
-            phrase = match.group(1) if match.group(1) else match.group(2)
-            if phrase:
-                quoted_phrases.add(phrase)
+        # 1. Precompute prompt-specific regex dependencies
+        prompt_data = []
+        for prompt in prompts:
+            prompt_lower = prompt.lower()
+            prompt_words = set(re.findall(r'\b\w+\b', prompt_lower))
+            quoted_phrases = set()
+            for match in re.finditer(r'"([^"]+)"|\'([^\']+)\'', prompt_lower):
+                phrase = match.group(1) if match.group(1) else match.group(2)
+                if phrase:
+                    quoted_phrases.add(phrase)
+            prompt_data.append((prompt_lower, prompt_words, quoted_phrases))
 
+        # 2. Setup Initial Sequences & Prefilling
+        input_sequences = []
+        generated_sequences = []
+
+        for prompt in prompts:
+            primed_prompt = self.formatter.build_function_prompt(prompt, functions)
+            input_sequences.append(self.tokenizer.encode(primed_prompt))
+
+            escaped_prompt = json.dumps(prompt)[1:-1]
+            boilerplate_start = f'{{"prompt": "{escaped_prompt}", "name": "'
+            generated_sequences.append(self.tokenizer.encode(boilerplate_start))
+
+        is_finished = [False] * batch_size
+
+        # Execution Loop
         for step in range(max_new_tokens):
-            # SAFE DECODING: Revert to proper BPE tokenizer decode to preserve semantic whitespace
-            current_prefix = self.tokenizer.decode(generated_ids)
-
-            mask, allowed_chars = self._get_mask(
-                current_prefix, name_trie, prompt_lower, prompt_words, quoted_phrases
-            )
-
-            current_sequence = input_ids + generated_ids
-            raw_logits = self.sdk.get_logits_from_input_ids(current_sequence)
-            logits_array = np.array(raw_logits, dtype=np.float32)
-
-            if mask.shape[0] < logits_array.shape[0]:
-                padded_mask = np.zeros(logits_array.shape[0], dtype=bool)
-                padded_mask[:mask.shape[0]] = mask
-                mask = padded_mask
-            elif mask.shape[0] > logits_array.shape[0]:
-                mask = mask[:logits_array.shape[0]]
-
-            logits_array[~mask] = -np.inf
-
-            next_token_id = int(np.argmax(logits_array))
-            generated_ids.append(next_token_id)
-
-            if verbose:
-                new_token_str = self.clean_vocab[next_token_id]
-                state_name = "Inside String" if self._is_in_string(current_prefix) else "Structural JSON"
-                Visualizer.print_step(step, new_token_str, allowed_chars, state_name)
-
-            new_prefix = self.tokenizer.decode(generated_ids)
-            if new_prefix.endswith('"'):
-                parts = new_prefix.rsplit('"', 2)
-                if len(parts) >= 3 and re.search(r'"name"\s*:\s*$', parts[-3]) and '"parameters"' not in parts[-3]:
-                    ff_tokens = self.tokenizer.encode(', "parameters": {')
-                    generated_ids.extend(ff_tokens)
-                    new_prefix = self.tokenizer.decode(generated_ids)
-
-            if self._is_complete(new_prefix, next_token_id):
-                if verbose:
-                    Visualizer.print_step_complete()
+            if all(is_finished):
                 break
 
-        return self.tokenizer.decode(generated_ids)
+            # 3. Isolate active prompts to save forward-pass compute
+            active_indices = [i for i, finished in enumerate(is_finished) if not finished]
+
+            # 4. Neural Network Forward Pass (Safe 1D Execution)
+            batch_logits = []
+            for i in active_indices:
+                seq = input_sequences[i] + generated_sequences[i]
+                logits = self.sdk.get_logits_from_input_ids(seq)
+
+                # Standardize shape to 1D (vocab_size) if SDK returns full history
+                logits_np = np.array(logits, dtype=np.float32)
+                if len(logits_np.shape) > 1:
+                    logits_np = logits_np[-1]
+                batch_logits.append(logits_np)
+
+            # Stack into a 2D matrix [active_batch_size, vocab_size]
+            logits_matrix = np.stack(batch_logits)
+
+            # 5. Build 2D Boolean Mask Matrix for active prompts
+            mask_matrix = np.ones((len(active_indices), self.vocab_size), dtype=bool)
+
+            for idx, orig_i in enumerate(active_indices):
+                current_prefix = self.tokenizer.decode(generated_sequences[orig_i])
+                p_lower, p_words, q_phrases = prompt_data[orig_i]
+
+                indiv_mask, allowed_chars = self._get_mask(
+                    current_prefix, name_trie, p_lower, p_words, q_phrases
+                )
+
+                # Align mask shape if tokenizer size differs slightly
+                if indiv_mask.shape[0] < self.vocab_size:
+                    padded_indiv = np.zeros(self.vocab_size, dtype=bool)
+                    padded_indiv[:indiv_mask.shape[0]] = indiv_mask
+                    indiv_mask = padded_indiv
+                elif indiv_mask.shape[0] > self.vocab_size:
+                    indiv_mask = indiv_mask[:self.vocab_size]
+
+                mask_matrix[idx] = indiv_mask
+
+                if verbose:
+                    new_token_str = self.clean_vocab[generated_sequences[orig_i][-1]] if step > 0 else ""
+                    state_name = "Inside String" if self._is_in_string(current_prefix) else "Structural JSON"
+                    print(f"[Prompt {orig_i + 1}] ", end="")
+                    Visualizer.print_status(step, new_token_str, allowed_chars, state_name)
+
+            # Align the 2D mask matrix with padded hardware model logits
+            if mask_matrix.shape[1] < logits_matrix.shape[1]:
+                padded_batch_mask = np.zeros((len(active_indices), logits_matrix.shape[1]), dtype=bool)
+                padded_batch_mask[:, :mask_matrix.shape[1]] = mask_matrix
+                mask_matrix = padded_batch_mask
+            elif mask_matrix.shape[1] > logits_matrix.shape[1]:
+                mask_matrix = mask_matrix[:, :logits_matrix.shape[1]]
+
+            # 6. Apply 2D Masking and Argmax extraction simultaneously
+            logits_matrix[~mask_matrix] = -np.inf
+            next_token_ids = np.argmax(logits_matrix, axis=1)
+
+            # 7. State Update and Deterministic Fast-Forwarding
+            for idx, orig_i in enumerate(active_indices):
+                next_id = int(next_token_ids[idx])
+                generated_sequences[orig_i].append(next_id)
+
+                new_prefix = self.tokenizer.decode(generated_sequences[orig_i])
+
+                if new_prefix.endswith('"'):
+                    parts = new_prefix.rsplit('"', 2)
+                    if len(parts) >= 3 and re.search(r'"name"\s*:\s*$', parts[-3]) and '"parameters"' not in parts[-3]:
+                        ff_tokens = self.tokenizer.encode(', "parameters": {')
+                        generated_sequences[orig_i].extend(ff_tokens)
+                        new_prefix = self.tokenizer.decode(generated_sequences[orig_i])
+
+                if self._is_complete(new_prefix, next_id):
+                    is_finished[orig_i] = True
+
+        if verbose:
+            Visualizer.print_div()
+
+        return [self.tokenizer.decode(seq) for seq in generated_sequences]
 
     def _get_mask(self, current_prefix: str, name_trie: SchemaTrie,
                   prompt_lower: str, prompt_words: Set[str], quoted_phrases: Set[str]) -> Tuple[np.ndarray, Set[str]]:
@@ -139,7 +190,6 @@ class ConstrainedDecoder:
         in_string = self._is_in_string(current_prefix)
 
         if not in_string:
-            # INSTANT BITWISE FILTERING - No Python loops!
             mask &= self.struct_mask
             mask &= self.safe_quote_mask
 
@@ -160,13 +210,11 @@ class ConstrainedDecoder:
                 if start_node is None:
                     mask[:] = False
                 else:
-                    # Trie traversal is the only necessary Python loop left
                     for t_id in range(self.vocab_size):
                         s = self.clean_vocab[t_id]
                         if not s or not name_trie.is_valid_suffix(start_node, s):
                             mask[t_id] = False
             else:
-                # INSTANT BITWISE FILTERING for standard string characters
                 mask &= self.wildcard_string_mask
                 mask &= self.safe_quote_mask
                 allowed_chars_viz = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\()[]{}*+^$|')
@@ -176,7 +224,6 @@ class ConstrainedDecoder:
                 current_val = param_match.group(2) if param_match else ""
 
                 if active_key in ["name", "s", "source_string"]:
-                    # Extractive rules require localized looping, but over a much smaller pre-filtered subset
                     valid_indices = np.where(mask)[0]
                     for t_id in valid_indices:
                         s = self.clean_vocab[t_id]

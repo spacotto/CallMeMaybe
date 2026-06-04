@@ -8,12 +8,12 @@ class Visualizer:
     @staticmethod
     def print_prompt_start(idx: int, total: int, prompt: str) -> None:
         """Renders the header for a new prompt evaluation."""
-        txt = f">>> Processing Prompt [{idx}/{total}]: "
+        txt = f">>> Prompt [{idx}/{total}]: "
         print("\n" + Formatter.apply('bold', 'yellow', txt) + prompt)
         print(Formatter.apply(None, 'gray', "-" * 70))
 
     @staticmethod
-    def print_step(step: int, token_str: str, allowed_chars: Set[str], state_name: str) -> None:
+    def print_status(step: int, token_str: str, allowed_chars: Set[str], state_name: str) -> None:
         """Handles the live-updating carriage return for token generation."""
         clean_token = token_str.replace('\n', '\\n').replace('\r', '\\r')
         line = (
@@ -30,9 +30,9 @@ class Visualizer:
         print(f"\r\033[K{line}", end="", flush=True)
 
     @staticmethod
-    def print_step_complete() -> None:
+    def print_div() -> None:
         """Closes the carriage return line securely."""
-        print() # Move past the \r line
+        print()
         print(Formatter.apply(None, 'gray', "-" * 70))
 
     @staticmethod
