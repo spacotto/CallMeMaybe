@@ -3,52 +3,80 @@ import os
 from enum import Enum
 from typing import List, Dict, Any
 
-
 class ModelFormat(Enum):
     CHATML = "chatml"
     INSTRUCT = "instruct"
 
-
 class Formatter:
     def __init__(self, format_type: ModelFormat = ModelFormat.CHATML) -> None:
         self.format_type = format_type
-        self.examples_str = self._load_and_build_examples()
-
-    def _load_and_build_examples(self) -> str:
-        """Dynamically loads the few-shot examples from the adjacent JSON asset."""
-        # Get the absolute path to the directory containing THIS file
+        # Dynamically map the path to the 'few_shot' folder located in the same directory as this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
-        json_path = os.path.join(current_dir, "few_shot.json")
+        self.examples_dir = os.path.join(current_dir, "few_shot")
 
-        try:
-            with open(json_path, 'r', encoding='utf-8') as f:
-                examples_data = json.load(f)
-        except Exception as e:
-            print(f"Warning: Failed to load few_shot.json from {json_path}: {e}")
-            return "--- EXAMPLES ---\n----------------\n\n"
+    def load_examples(self, func_name: str) -> List[Dict[str, Any]]:
+        """Dynamically loads few-shot examples for a specific function."""
+        filepath = os.path.join(self.examples_dir, f"{func_name}.json")
+        if os.path.exists(filepath):
+            try:
+                with open(filepath, 'r', encoding='utf-8') as f:
+                    return json.load(f)
+            except json.JSONDecodeError as e:
+                print(f"Warning: Failed to parse examples for {func_name}: {e}")
+        return []
 
-        # Compile the JSON dicts into the exact string formatting required by the LLM
+    def _format_examples_string(self, examples: List[Dict[str, Any]]) -> str:
+        """Compiles targeted JSON examples into a strict string layout."""
+        if not examples:
+            return ""
+
         formatted = "--- EXAMPLES ---\n"
-        for ex in examples_data:
-            formatted += f"User: {ex.get('user', '')}\n"
-            out_str = json.dumps(ex.get('output', {}))
-            formatted += f"Output: {out_str}\n\n"
+        for ex in examples:
+            formatted += f"User: {ex.get('prompt', '')}\n"
+            # We enforce standard JSON spacing to match the LLM's expected training data
+            out_str = json.dumps(ex.get('parameters', {}), indent=2)
+            formatted += f"Output:\n{out_str}\n\n"
         formatted += "----------------\n\n"
         return formatted
 
-    def build_function_prompt(self, user_prompt: str, functions: List[Dict[str, Any]]) -> str:
-        schema_str = json.dumps(functions, indent=2)
+    def build_classification_prompt(self, user_prompt: str, functions: List[Dict[str, Any]]) -> str:
+        """PASS 1: Zero-Shot prompt to force the LLM to identify the function name."""
+        # For classification, we only need the names and descriptions to save context window space
+        schema_summary = [{"name": f["name"], "description": f.get("description", "")} for f in functions]
+        schema_str = json.dumps(schema_summary, indent=2)
 
         system_instruction = (
-            "You are a logical data extraction engine.\n"
-            "You MUST respond with a single, valid JSON object containing ONLY the keys 'name' and 'parameters'.\n"
-            "You MUST Map the user's request to the correct function and extract the parameters EXACTLY as defined in the schema.\n\n"
+            "You are a routing engine. Your ONLY job is to classify the user's request.\n"
+            "You MUST respond with a single JSON object containing ONLY the key 'name'.\n"
+            "Map the user's request to the correct function name from the list below.\n\n"
             f"AVAILABLE FUNCTIONS:\n{schema_str}\n\n"
-            f"{self.examples_str}"
-            "Do NOT include any conversational text.\n"
-            "Do NOT wrap the output in markdown blocks. Generate ONLY the raw JSON object."
+            "Do NOT include any conversational text. Generate ONLY the raw JSON object."
         )
 
+        return self._route_template(system_instruction, user_prompt)
+
+    def build_extraction_prompt(self, user_prompt: str, target_name: str, functions: List[Dict[str, Any]], examples: List[Dict[str, Any]]) -> str:
+        """PASS 2: Few-Shot prompt to force the LLM to extract complex nested parameters."""
+        # Find the specific schema for the target function
+        target_schema = next((f for f in functions if f["name"] == target_name), {})
+        schema_str = json.dumps(target_schema, indent=2)
+
+        examples_str = self._format_examples_string(examples)
+
+        system_instruction = (
+            "You are a precise data extraction engine.\n"
+            f"The user's request maps to the function: '{target_name}'.\n"
+            "You MUST extract the parameters EXACTLY as defined in the schema below.\n"
+            "You MUST respond with a single JSON object containing the keys 'name' and 'parameters'.\n\n"
+            f"FUNCTION SCHEMA:\n{schema_str}\n\n"
+            f"{examples_str}"
+            "Do NOT include any conversational text. Generate ONLY the raw JSON object."
+        )
+
+        return self._route_template(system_instruction, user_prompt)
+
+    def _route_template(self, system_instruction: str, user_prompt: str) -> str:
+        """Applies the correct model template wrapper."""
         if self.format_type == ModelFormat.CHATML:
             return self._build_chatml(system_instruction, user_prompt)
         elif self.format_type == ModelFormat.INSTRUCT:
