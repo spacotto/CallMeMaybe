@@ -1,0 +1,26 @@
+[
+  {
+    "prompt": "Replace all numbers in \"Hello 34 I'm 233 years old\" with NUMBERS",
+    "parameters": {
+      "source_string": "Hello 34 I'm 233 years old",
+      "regex": "\\d+",
+      "replacement": "NUMBERS"
+    }
+  },
+  {
+    "prompt": "Replace all vowels in 'Programming is fun' with asterisks",
+    "parameters": {
+      "source_string": "Programming is fun",
+      "regex": "[aeiouAEIOU]",
+      "replacement": "*"
+    }
+  },
+  {
+    "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'",
+    "parameters": {
+      "source_string": "The cat sat on the mat with another cat",
+      "regex": "\\bcat\\b",
+      "replacement": "dog"
+    }
+  }
+]

@@ -1,0 +1,77 @@
+[
+  {
+    "name": "fn_calculate_distance",
+    "description": "Calculate the distance between two 2D points.",
+    "parameters": {
+      "point_a": {
+        "type": "object",
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" }
+        }
+      },
+      "point_b": {
+        "type": "object",
+        "properties": {
+          "x": { "type": "number" },
+          "y": { "type": "number" }
+        }
+      }
+    },
+    "returns": {
+      "type": "number"
+    }
+  },
+  {
+    "name": "fn_create_user_profile",
+    "description": "Create a new user profile with personal info and preferences.",
+    "parameters": {
+      "username": {
+        "type": "string"
+      },
+      "personal_info": {
+        "type": "object",
+        "properties": {
+          "age": { "type": "number" },
+          "email": { "type": "string" }
+        }
+      },
+      "preferences": {
+        "type": "object",
+        "properties": {
+          "theme": { "type": "string" },
+          "notifications": { "type": "boolean" }
+        }
+      }
+    },
+    "returns": {
+      "type": "string"
+    }
+  },
+  {
+    "name": "fn_book_flight",
+    "description": "Book a flight specifying departure, arrival, and passenger details.",
+    "parameters": {
+      "route": {
+        "type": "object",
+        "properties": {
+          "origin": { "type": "string" },
+          "destination": { "type": "string" }
+        }
+      },
+      "passengers": {
+        "type": "object",
+        "properties": {
+          "adults": { "type": "number" },
+          "children": { "type": "number" }
+        }
+      },
+      "date": {
+        "type": "string"
+      }
+    },
+    "returns": {
+      "type": "string"
+    }
+  }
+]

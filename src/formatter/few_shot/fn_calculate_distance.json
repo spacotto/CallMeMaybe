@@ -1,0 +1,41 @@
+[
+  {
+    "prompt": "Calculate the distance between point A at 0,0 and point B at 3,4.",
+    "parameters": {
+      "point_a": {
+        "x": 0,
+        "y": 0
+      },
+      "point_b": {
+        "x": 3,
+        "y": 4
+      }
+    }
+  },
+  {
+    "prompt": "Find the distance from coordinates (10, -5) to (2, 8).",
+    "parameters": {
+      "point_a": {
+        "x": 10,
+        "y": -5
+      },
+      "point_b": {
+        "x": 2,
+        "y": 8
+      }
+    }
+  },
+  {
+    "prompt": "How far is (1, 1) from (-1, -1)?",
+    "parameters": {
+      "point_a": {
+        "x": 1,
+        "y": 1
+      },
+      "point_b": {
+        "x": -1,
+        "y": -1
+      }
+    }
+  }
+]

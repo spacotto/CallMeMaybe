@@ -1,0 +1,23 @@
+[
+  {
+    "prompt": "What is the sum of 2 and 3?",
+    "parameters": {
+      "a": 2,
+      "b": 3
+    }
+  },
+  {
+    "prompt": "What is the sum of 265 and 345?",
+    "parameters": {
+      "a": 265,
+      "b": 345
+    }
+  },
+  {
+    "prompt": "Add -10 and 50 together.",
+    "parameters": {
+      "a": -10,
+      "b": 50
+    }
+  }
+]

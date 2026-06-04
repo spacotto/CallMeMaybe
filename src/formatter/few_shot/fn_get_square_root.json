@@ -1,0 +1,20 @@
+[
+  {
+    "prompt": "What is the square root of 16?",
+    "parameters": {
+      "a": 16
+    }
+  },
+  {
+    "prompt": "Calculate the square root of 144",
+    "parameters": {
+      "a": 144
+    }
+  },
+  {
+    "prompt": "Find the square root of 25.",
+    "parameters": {
+      "a": 25
+    }
+  }
+]
