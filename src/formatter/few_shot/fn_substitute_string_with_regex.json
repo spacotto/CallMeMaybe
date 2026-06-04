@@ -19,7 +19,7 @@
     "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'",
     "parameters": {
       "source_string": "The cat sat on the mat with another cat",
-      "regex": "\\bcat\\b",
+      "regex": "cat",
       "replacement": "dog"
     }
   }

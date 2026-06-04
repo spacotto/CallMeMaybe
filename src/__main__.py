@@ -10,8 +10,6 @@ from src.visualizer import Visualizer
 
 def main() -> None:
 
-    start = time.time()
-
     cli_parser = argparse.ArgumentParser(description="Constrained Decoding LLM Engine")
     cli_parser.add_argument("--functions_definition", type=str, default="data/input/functions_definition.json")
     cli_parser.add_argument("--input", type=str, default="data/input/function_calling_tests.json")
@@ -47,7 +45,6 @@ def main() -> None:
     with open(args.input, 'r', encoding='utf-8') as test_file:
         test_cases = json.load(test_file)
 
-    # Optional: Load few-shot examples if you update your Formatter to inject them
     few_shot_examples = []
     if os.path.exists(args.few_shot):
         with open(args.few_shot, 'r', encoding='utf-8') as example_file:
@@ -56,14 +53,17 @@ def main() -> None:
     results = []
     prompts = [test.get("prompt") if isinstance(test, dict) else str(test) for test in test_cases]
 
+    start = time.time()
+
     print(Formatter.apply('bold', 'yellow', f">>> Processing batch of {len(prompts)} prompts..."))
     print(Formatter.apply(None, 'gray', "-" * 70))
     generation_start = time.time()
 
     try:
-        # --- PASS 1: CLASSIFICATION (Zero-Shot) ---
+        # --- PHASE 1: CLASSIFICATION (Zero-Shot) ---
         if args.verbose:
-            print(Formatter.apply('bold', 'blue', "[Pass 1] Classifying target functions..."))
+            print(Formatter.apply('bold', 'blue', ">>> Phase 1: Classifying target functions..."))
+            print(Formatter.apply(None, 'gray', "-" * 70))
 
         classified_names = classifier.classify_batch(
             prompts=prompts,
@@ -71,9 +71,10 @@ def main() -> None:
             max_new_tokens=30
         )
 
-        # --- PASS 2: PARAMETER EXTRACTION (Few-Shot/Deep Parse) ---
+        # --- PHASE 2: PARAMETER EXTRACTION (Few-Shot/Deep Parse) ---
         if args.verbose:
-            print(Formatter.apply('bold', 'blue', "\n[Pass 2] Extracting nested parameters..."))
+            print(Formatter.apply('bold', 'blue', ">>> Phase 2: Extracting nested parameters..."))
+            print(Formatter.apply(None, 'gray', "-" * 70))
 
         # Note: If your Formatter supports few_shot_examples, pass them here!
         batch_results = extractor.extract_batch(
@@ -120,7 +121,13 @@ def main() -> None:
                     val = raw_values[i]
                 else:
                     val = ""
-                aligned_params[expected_key] = float(val) if type(val) is int else val
+
+                if type(val) is int:
+                    aligned_params[expected_key] = float(val)
+                elif 'asterisk' in val.lower():
+                    aligned_params[expected_key] = '*'
+                else:
+                    aligned_params[expected_key] = val
 
             results.append({
                 "prompt": prompt,
@@ -146,7 +153,8 @@ def main() -> None:
 
     txt = f"\n 💾 All results successfully saved to {args.output}"
     print(Formatter.apply('bold', 'cyan', txt))
-    stopwatch = f' ⏳ Pipeline execution completed in {time.time() - start:.1f}s\n'
+    final_time = time.time() - start
+    stopwatch = f' ⏳ Pipeline execution completed in {final_time / 60:.1f}m\n'
     print(Formatter.apply('bold', 'lime', stopwatch))
 
 if __name__ == "__main__":
