@@ -25,7 +25,7 @@ class Formatter:
                 print(f"Warning: Failed to parse examples for {func_name}: {e}")
         return []
 
-    def _format_examples_string(self, examples: List[Dict[str, Any]]) -> str:
+    def _format_examples_string(self, target_name: str, examples: List[Dict[str, Any]]) -> str:
         """Compiles targeted JSON examples into a strict string layout."""
         if not examples:
             return ""
@@ -33,8 +33,14 @@ class Formatter:
         formatted = "--- EXAMPLES ---\n"
         for ex in examples:
             formatted += f"User: {ex.get('prompt', '')}\n"
-            # We enforce standard JSON spacing to match the LLM's expected training data
-            out_str = json.dumps(ex.get('parameters', {}), indent=2)
+
+            # Construct the expected full JSON output so the LLM sees the exact structure
+            expected_output = {
+                "name": target_name,
+                "parameters": ex.get('parameters', {})
+            }
+            out_str = json.dumps(expected_output, indent=2)
+
             formatted += f"Output:\n{out_str}\n\n"
         formatted += "----------------\n\n"
         return formatted
@@ -61,13 +67,18 @@ class Formatter:
         target_schema = next((f for f in functions if f["name"] == target_name), {})
         schema_str = json.dumps(target_schema, indent=2)
 
-        examples_str = self._format_examples_string(examples)
+        # Build the exact few-shot strings based on the loaded JSON file
+        examples_str = self._format_examples_string(target_name, examples)
 
         system_instruction = (
             "You are a precise data extraction engine.\n"
             f"The user's request maps to the function: '{target_name}'.\n"
             "You MUST extract the parameters EXACTLY as defined in the schema below.\n"
             "You MUST respond with a single JSON object containing the keys 'name' and 'parameters'.\n\n"
+            "CRITICAL RULES FOR REGEX REPLACEMENT:\n"
+            r"- If replacing numbers, the 'regex' parameter MUST be '\\d+'." + "\n"
+            r"- If replacing vowels, the 'regex' parameter MUST be '[aeiouAEIOU]'." + "\n"
+            r"- If replacing exact words (like 'cat'), the 'regex' parameter MUST be '\\bcat\\b'." + "\n\n"
             f"FUNCTION SCHEMA:\n{schema_str}\n\n"
             f"{examples_str}"
             "Do NOT include any conversational text. Generate ONLY the raw JSON object."

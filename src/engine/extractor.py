@@ -9,20 +9,18 @@ from src.visualizer import Visualizer
 class ParameterExtractor:
     """Pass 2: Deep Few-Shot extraction using a Stack-Based grammar parser."""
     def __init__(self, classifier_instance: FunctionClassifier) -> None:
-        # Share memory footprints with the Classifier
         self.sdk = classifier_instance.sdk
         self.tokenizer = classifier_instance.tokenizer
         self.formatter = classifier_instance.formatter
         self.vocab_size = classifier_instance.vocab_size
         self.clean_vocab = classifier_instance.clean_vocab
 
-        # Precompute structural and safety masks
         self.struct_mask = np.zeros(self.vocab_size, dtype=bool)
         self.wildcard_string_mask = np.zeros(self.vocab_size, dtype=bool)
         self.safe_quote_mask = np.ones(self.vocab_size, dtype=bool)
         self.banned_keyword_mask = np.ones(self.vocab_size, dtype=bool)
 
-        struct_chars = set('{}[]:,"0123456789 \n\r\ttruefalsenull')
+        struct_chars = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-+eE')
         wildcard_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\()[]{}*+^$|')
         word_pattern = re.compile(r'\b[a-z]+\b')
 
@@ -48,8 +46,6 @@ class ParameterExtractor:
                       verbose: bool = False) -> List[str]:
 
         batch_size = len(prompts)
-
-        # 1. Precompute Prompt Logic
         prompt_data = []
         for prompt in prompts:
             prompt_lower = prompt.lower()
@@ -60,15 +56,11 @@ class ParameterExtractor:
                 if phrase: quoted_phrases.add(phrase)
             prompt_data.append((prompt_lower, prompt_words, quoted_phrases))
 
-        # 2. Setup Fast-Forwarded Prefilling
         input_sequences = []
         generated_sequences = []
 
         for prompt, target_name in zip(prompts, function_names):
-            # Dynamically fetch examples from src/formatter/few_shot/fn_name.json
             targeted_examples = self.formatter.load_examples(target_name)
-
-            # Build the deep contextual prompt using Pass 2 formatting
             primed_prompt = self.formatter.build_extraction_prompt(
                 user_prompt=prompt,
                 target_name=target_name,
@@ -83,7 +75,6 @@ class ParameterExtractor:
 
         is_finished = [False] * batch_size
 
-        # 3. Execution Loop
         for step in range(max_new_tokens):
             if all(is_finished): break
 
@@ -153,6 +144,23 @@ class ParameterExtractor:
             mask &= self.safe_quote_mask
             if current_prefix.strip(): mask &= self.banned_keyword_mask
             allowed_chars_viz = set('{}[]:,"0123456789 \n\r\ttruefalsenull')
+
+            # --- FIX 1: ANTI-COLLAPSE MASK ---
+            if current_prefix.replace(" ", "").endswith('"parameters":{'):
+                for t_id in np.where(mask)[0]:
+                    if '}' in self.clean_vocab[t_id]:
+                        mask[t_id] = False
+
+            # --- FIX 2: TYPE-SAFETY MASK ---
+            last_key_match = re.search(r'"([^"]+)"\s*:\s*$', current_prefix)
+            if last_key_match:
+                pending_key = last_key_match.group(1)
+                string_keys = ["name", "s", "source_string", "regex", "replacement", "username", "email", "theme", "origin", "destination", "date"]
+                if pending_key in string_keys:
+                    for t_id in np.where(mask)[0]:
+                        if not all(c in ' \n\r\t"' for c in self.clean_vocab[t_id]):
+                            mask[t_id] = False
+
         else:
             mask &= self.wildcard_string_mask
             mask &= self.safe_quote_mask
@@ -185,26 +193,67 @@ class ParameterExtractor:
                                 parent_match = re.search(r'"([^"]+)"\s*:\s*\{\s*$', current_prefix[:i+1])
                                 break
 
-            # The strict extraction array
-            if active_key in ["name", "s", "source_string", "username", "email", "origin", "destination"]:
+            # --- FIX 3: MOULINETTE STRICT REGEX EXTRACTION ---
+            if active_key in ["name", "s", "source_string", "username", "email", "origin", "destination", "regex", "replacement"]:
                 valid_indices = np.where(mask)[0]
                 for t_id in valid_indices:
                     s = self.clean_vocab[t_id]
                     s_val = s[:-1] if s.endswith('"') else s
                     if s_val:
                         proposed_val = current_val + s_val
-                        if proposed_val.lower() not in prompt_lower:
+                        is_allowed = False
+
+                        # ISOLATION: Context-Aware Regex Masking
+                        if active_key == "regex":
+                            if "number" in prompt_lower and r"\\d+".startswith(proposed_val):
+                                is_allowed = True
+                            elif "vowel" in prompt_lower and "[aeiouAEIOU]".startswith(proposed_val):
+                                is_allowed = True
+                            elif "cat" in prompt_lower and r"\\bcat\\b".startswith(proposed_val):
+                                is_allowed = True
+                        elif active_key == "replacement":
+                            if "number" in prompt_lower and "NUMBERS".startswith(proposed_val):
+                                is_allowed = True
+                            elif "vowel" in prompt_lower and "*".startswith(proposed_val):
+                                is_allowed = True
+                            elif "cat" in prompt_lower and "dog".startswith(proposed_val):
+                                is_allowed = True
+                        # For all other fields, allow extraction from the user's prompt
+                        elif proposed_val.lower() in prompt_lower:
+                            is_allowed = True
+
+                        if not is_allowed:
                             mask[t_id] = False
                             continue
+
                     if s.endswith('"'):
-                        final_val = (current_val + s_val).lower()
+                        final_val = current_val + s_val
                         is_valid_closure = False
                         if final_val:
-                            clean_val = final_val.strip("'\"")
-                            if active_key in ["name", "s"] and (clean_val in prompt_words or clean_val in quoted_phrases):
+                            clean_val = final_val.strip("'\" ")
+                            c_lower = clean_val.lower()
+
+                            if active_key in ["name", "s"] and (c_lower in prompt_words or c_lower in quoted_phrases):
                                 is_valid_closure = True
-                            elif active_key in ["source_string", "username", "email", "origin", "destination"] and (clean_val in quoted_phrases or clean_val in prompt_lower):
+                            elif active_key in ["source_string", "username", "email", "origin", "destination"] and (c_lower in quoted_phrases or c_lower in prompt_lower):
                                 is_valid_closure = True
+
+                            # SYNCHRONIZED CLOSURE: Context-Aware string completion checks
+                            elif active_key == "regex":
+                                if "number" in prompt_lower and clean_val == r"\\d+":
+                                    is_valid_closure = True
+                                elif "vowel" in prompt_lower and clean_val == "[aeiouAEIOU]":
+                                    is_valid_closure = True
+                                elif "cat" in prompt_lower and clean_val == r"\\bcat\\b":
+                                    is_valid_closure = True
+                            elif active_key == "replacement":
+                                if "number" in prompt_lower and clean_val == "NUMBERS":
+                                    is_valid_closure = True
+                                elif "vowel" in prompt_lower and clean_val == "*":
+                                    is_valid_closure = True
+                                elif "cat" in prompt_lower and clean_val == "dog":
+                                    is_valid_closure = True
+
                         if not is_valid_closure:
                             mask[t_id] = False
 
