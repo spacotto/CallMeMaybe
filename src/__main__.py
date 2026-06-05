@@ -69,17 +69,6 @@ def main() -> None:
         error(f"Failed to load input prompts: {e}")
         return
 
-    # --- FEW SHOT LOADING (OPTIONAL) ---
-
-    try:
-        few_shot_examples = []
-        if os.path.exists(args.few_shot):
-            with open(args.few_shot, 'r', encoding='utf-8') as example_file:
-                few_shot_examples = json.load(example_file)
-
-    except Exception as e:
-        print(Formatter.apply('bold', 'yellow', f"Warning: Failed to load few-shot examples - {e}"))
-
     results = []
     start = time.time()
 

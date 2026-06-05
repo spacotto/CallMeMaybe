@@ -48,7 +48,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help test campus-init clean-venv visual
+       	help test campus-init clean-venv visual nested
 
 # ------------------------------------------------------------
 #  Default target
@@ -195,4 +195,16 @@ visual:
 	--functions_definition $(FUNC_DEF) \
 	--input $(INPUT_F) \
 	--output $(OUTPUT_F) \
+	--verbose
+
+# ------------------------------------------------------------
+#  nested 
+# ------------------------------------------------------------
+
+nested:
+	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
+	@$(PYTHON) -m src \
+	--functions_definition data/nested_input/nested_functions_definition.json \
+	--input data/nested_input/nested_function_calling_tests.json \
+	--output data/output/function_calls.json \
 	--verbose
