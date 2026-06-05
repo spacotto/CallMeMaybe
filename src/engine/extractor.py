@@ -7,7 +7,7 @@ from src.engine.classifier import FunctionClassifier
 from src.visualizer import Visualizer
 
 class ParameterExtractor:
-    """Pass 2: Deep Few-Shot extraction using a Stack-Based grammar parser."""
+    """Phase 2: Deep Few-Shot extraction using a Stack-Based grammar parser."""
     def __init__(self, classifier_instance: FunctionClassifier) -> None:
         self.sdk = classifier_instance.sdk
         self.tokenizer = classifier_instance.tokenizer
