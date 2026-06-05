@@ -20,9 +20,8 @@ class ParameterExtractor:
         self.safe_quote_mask = np.ones(self.vocab_size, dtype=bool)
         self.banned_keyword_mask = np.ones(self.vocab_size, dtype=bool)
 
-        # FIX 1: Removed '+' to physically ban the model from attempting string concatenation ("A" + "B")
         struct_chars = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-eE')
-        wildcard_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\()[]{}*+^$|')
+        wildcard_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,:;!?@"\'/\\()[]{}*+^$|=~`%&<>')
         word_pattern = re.compile(r'\b[a-z]+\b')
 
         for t_id, s in enumerate(self.clean_vocab):
