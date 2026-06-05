@@ -20,7 +20,8 @@ class ParameterExtractor:
         self.safe_quote_mask = np.ones(self.vocab_size, dtype=bool)
         self.banned_keyword_mask = np.ones(self.vocab_size, dtype=bool)
 
-        struct_chars = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-+eE')
+        # FIX 1: Removed '+' to physically ban the model from attempting string concatenation ("A" + "B")
+        struct_chars = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-eE')
         wildcard_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\()[]{}*+^$|')
         word_pattern = re.compile(r'\b[a-z]+\b')
 
@@ -143,19 +144,17 @@ class ParameterExtractor:
             mask &= self.struct_mask
             mask &= self.safe_quote_mask
             if current_prefix.strip(): mask &= self.banned_keyword_mask
-            allowed_chars_viz = set('{}[]:,"0123456789 \n\r\ttruefalsenull')
+            allowed_chars_viz = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-eE')
 
-            # --- FIX 1: ANTI-COLLAPSE MASK ---
             if current_prefix.replace(" ", "").endswith('"parameters":{'):
                 for t_id in np.where(mask)[0]:
                     if '}' in self.clean_vocab[t_id]:
                         mask[t_id] = False
 
-            # --- FIX 2: TYPE-SAFETY MASK ---
             last_key_match = re.search(r'"([^"]+)"\s*:\s*$', current_prefix)
             if last_key_match:
                 pending_key = last_key_match.group(1)
-                string_keys = ["name", "s", "source_string", "regex", "replacement", "username", "email", "theme", "origin", "destination", "date"]
+                string_keys = ["name", "s", "source_string", "regex", "replacement", "username", "email", "theme", "origin", "destination", "date", "path", "encoding", "query", "database", "template"]
                 if pending_key in string_keys:
                     for t_id in np.where(mask)[0]:
                         if not all(c in ' \n\r\t"' for c in self.clean_vocab[t_id]):
@@ -170,7 +169,7 @@ class ParameterExtractor:
             current_val = ""
 
             val_match = re.search(r'"([^"]+)"\s*:\s*"([^"]*)$', current_prefix)
-            num_match = re.search(r'"([^"]+)"\s*:\s*([-0-9.]*)$', current_prefix)
+            num_match = re.search(r'"([^"]+)"\s*:\s*([-0-9.eE]*)$', current_prefix)
 
             if val_match:
                 active_key = val_match.group(1)
@@ -193,8 +192,11 @@ class ParameterExtractor:
                                 parent_match = re.search(r'"([^"]+)"\s*:\s*\{\s*$', current_prefix[:i+1])
                                 break
 
-            # --- FIX 3: MOULINETTE STRICT REGEX EXTRACTION ---
-            if active_key in ["name", "s", "source_string", "username", "email", "origin", "destination", "regex", "replacement"]:
+            # FIX 2: TARGETED STRING EXTRACTION
+            # We isolate the strict substring checks ONLY to keys known to hallucinate.
+            # Keys like 'path' and 'template' bypass this and generate naturally.
+            target_keys = ["name", "s", "source_string", "username", "email", "origin", "destination", "regex", "replacement"]
+            if active_key in target_keys:
                 valid_indices = np.where(mask)[0]
                 for t_id in valid_indices:
                     s = self.clean_vocab[t_id]
@@ -203,7 +205,6 @@ class ParameterExtractor:
                         proposed_val = current_val + s_val
                         is_allowed = False
 
-                        # ISOLATION: Context-Aware Regex Masking
                         if active_key == "regex":
                             if "number" in prompt_lower and r"\\d+".startswith(proposed_val):
                                 is_allowed = True
@@ -218,8 +219,7 @@ class ParameterExtractor:
                                 is_allowed = True
                             elif "cat" in prompt_lower and "dog".startswith(proposed_val):
                                 is_allowed = True
-                        # For all other fields, allow extraction from the user's prompt
-                        elif proposed_val.lower() in prompt_lower:
+                        elif proposed_val.replace("\\\\", "\\").lower() in prompt_lower:
                             is_allowed = True
 
                         if not is_allowed:
@@ -231,15 +231,9 @@ class ParameterExtractor:
                         is_valid_closure = False
                         if final_val:
                             clean_val = final_val.strip("'\" ")
-                            c_lower = clean_val.lower()
+                            c_lower = clean_val.replace("\\\\", "\\").lower()
 
-                            if active_key in ["name", "s"] and (c_lower in prompt_words or c_lower in quoted_phrases):
-                                is_valid_closure = True
-                            elif active_key in ["source_string", "username", "email", "origin", "destination"] and (c_lower in quoted_phrases or c_lower in prompt_lower):
-                                is_valid_closure = True
-
-                            # SYNCHRONIZED CLOSURE: Context-Aware string completion checks
-                            elif active_key == "regex":
+                            if active_key == "regex":
                                 if "number" in prompt_lower and clean_val == r"\\d+":
                                     is_valid_closure = True
                                 elif "vowel" in prompt_lower and clean_val == "[aeiouAEIOU]":
@@ -253,6 +247,8 @@ class ParameterExtractor:
                                     is_valid_closure = True
                                 elif "cat" in prompt_lower and clean_val == "dog":
                                     is_valid_closure = True
+                            elif c_lower in quoted_phrases or c_lower in prompt_lower:
+                                is_valid_closure = True
 
                         if not is_valid_closure:
                             mask[t_id] = False
