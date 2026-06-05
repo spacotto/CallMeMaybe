@@ -191,9 +191,8 @@ class ParameterExtractor:
                                 parent_match = re.search(r'"([^"]+)"\s*:\s*\{\s*$', current_prefix[:i+1])
                                 break
 
-            # FIX 2: TARGETED STRING EXTRACTION
-            # We isolate the strict substring checks ONLY to keys known to hallucinate.
-            # Keys like 'path' and 'template' bypass this and generate naturally.
+            # Isolate the strict substring checks ONLY to keys known to hallucinate
+            # Keys like 'path' and 'template' bypass this and generate naturally
             target_keys = ["name", "s", "source_string", "username", "email", "origin", "destination", "regex", "replacement"]
             if active_key in target_keys:
                 valid_indices = np.where(mask)[0]
