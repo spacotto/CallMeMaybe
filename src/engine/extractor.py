@@ -153,7 +153,7 @@ class ParameterExtractor:
             last_key_match = re.search(r'"([^"]+)"\s*:\s*$', current_prefix)
             if last_key_match:
                 pending_key = last_key_match.group(1)
-                string_keys = ["name", "s", "source_string", "regex", "replacement", "username", "email", "theme", "origin", "destination", "date", "path", "encoding", "query", "database", "template"]
+                string_keys = ["name", "s", "source_string", "regex", "path", "encoding", "query", "database", "template"]
                 if pending_key in string_keys:
                     for t_id in np.where(mask)[0]:
                         if not all(c in ' \n\r\t"' for c in self.clean_vocab[t_id]):
