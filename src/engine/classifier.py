@@ -8,7 +8,7 @@ from llm_sdk import Small_LLM_Model
 from src.engine.trie import SchemaTrie
 
 class FunctionClassifier:
-    """Pass 1: Ultra-fast Zero-Shot classification to identify the target function."""
+    """Phase 1: Ultra-fast Zero-Shot classification to identify the target function."""
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         self.sdk = Small_LLM_Model(model_name=model_name)
         self.tokenizer = Tokenizer()
