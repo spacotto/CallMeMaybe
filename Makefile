@@ -37,7 +37,7 @@ WHITE	:= \033[1;97m
 #  Additional commands
 # ------------------------------------------------------------
 
-ECHO	:= echo -e
+ECHO	:= echo
 FIND	:= /bin/find
 IGNORE	:= 2>/dev/null || true
 MV	:= /bin/mv
@@ -48,7 +48,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help test campus-init clean-venv visual nested
+       	help test campus-init clean-venv visual nested public private
 
 # ------------------------------------------------------------
 #  Default target
@@ -208,3 +208,25 @@ nested:
 	--input data/nested_input/nested_function_calling_tests.json \
 	--output data/output/function_calls.json \
 	--verbose
+
+# ------------------------------------------------------------
+#  private 
+# ------------------------------------------------------------
+
+private:
+	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
+	@$(PYTHON) -m src \
+	--functions_definition moulinette/data/input/functions_definition.json \
+	--input moulinette/data/input/function_calling_tests.json \
+	--output data/output/function_calls_private.json 
+
+# ------------------------------------------------------------
+#  public 
+# ------------------------------------------------------------
+
+public:
+	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
+	@$(PYTHON) -m src \
+	--functions_definition data/input/functions_definition.json \
+	--input data/input/function_calling_tests.json \
+	--output data/output/function_calls_public.json 
