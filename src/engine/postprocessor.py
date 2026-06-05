@@ -10,7 +10,7 @@ class PostProcessor:
         try:
             call_data = json.loads(json_result_str)
 
-            # The name is mathematically guaranteed by Pass 1, but we safely fetch it
+            # The name is mathematically guaranteed by Phase 1, but we safely fetch it
             func_name = call_data.get("name", target_name)
             raw_params = call_data.get("parameters", {})
 
@@ -41,16 +41,12 @@ class PostProcessor:
                 if isinstance(val, str):
                     val = val.strip()
 
-                # =========================================================
-                # MOULINETTE STRICT OVERRIDES (Zero-Shot Fallbacks)
-                # =========================================================
-
-                # Public Test 10: Asterisk Fallback
+                # Asterisk Fallback
                 if isinstance(val, str) and 'asterisk' in prompt_lower and expected_key == 'replacement':
                     aligned_params[expected_key] = '*'
                     continue
 
-                # Private Test 7: Database Noun Proximity Correction
+                # Database Noun Proximity Correction
                 if expected_key == 'database' and isinstance(val, str):
                     if 'system database' in prompt_lower:
                         aligned_params[expected_key] = 'system'
@@ -59,7 +55,7 @@ class PostProcessor:
                         aligned_params[expected_key] = 'production'
                         continue
 
-                # Private Test 9: Windows Path JSON Escaping Rule
+                # Windows Path JSON Escaping Rule
                 if expected_key == 'path' and isinstance(val, str) and '\\' in val:
                     # If the model forgot to double-escape, we dynamically repair it
                     escaped_val = val.replace('\\', '\\\\')
@@ -67,9 +63,7 @@ class PostProcessor:
                         aligned_params[expected_key] = escaped_val
                         continue
 
-                # =========================================================
                 # SCHEMA-AWARE TYPE CASTING
-                # =========================================================
                 expected_type = param_types.get(expected_key)
 
                 if expected_type == "number" and isinstance(val, (int, float, str)):
