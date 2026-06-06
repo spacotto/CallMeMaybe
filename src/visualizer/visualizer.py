@@ -1,8 +1,8 @@
-import json
-import os
-import argparse
-from typing import Set, Dict, Any, List
-from src.utils import Formatter, error
+from typing import Set, Dict, Any
+
+
+from src.utils import Formatter
+
 
 class Visualizer:
     @staticmethod
@@ -13,18 +13,22 @@ class Visualizer:
         print(Formatter.apply(None, 'gray', "-" * 70))
 
     @staticmethod
-    def print_status(step: int, token_str: str, allowed_chars: Set[str], state_name: str) -> None:
+    def print_status(
+        step: int, token_str: str, allowed_chars: Set[str], state_name: str
+    ) -> None:
         """Handles the live-updating carriage return for token generation."""
         clean_token = token_str.replace('\n', '\\n').replace('\r', '\\r')
         line = (
             Formatter.apply('bold', 'blue', f"[{step+1:03d}] ") +
-            Formatter.apply(None, 'cyan', f"State: ") +
+            Formatter.apply(None, 'cyan', "State: ") +
             Formatter.apply('bold', 'white', f"{state_name:<16}") +
             Formatter.apply(None, 'gray', " | ") +
-            Formatter.apply(None, 'yellow', f"Mask: ") +
-            Formatter.apply('bold', 'yellow', f"{len(allowed_chars):02d} allowed chars") +
+            Formatter.apply(None, 'yellow', "Mask: ") +
+            Formatter.apply(
+                'bold', 'yellow', f"{len(allowed_chars):02d} allowed chars"
+            ) +
             Formatter.apply(None, 'gray', " | ") +
-            Formatter.apply(None, 'lime', f"Token Generated: ") +
+            Formatter.apply(None, 'lime', "Token Generated: ") +
             Formatter.apply('bold', 'lime', f"'{clean_token}'")
         )
         print(f"\r\033[K{line}", end="", flush=True)
@@ -42,7 +46,7 @@ class Visualizer:
             txt = f">>> Valid JSON genrated in {gen_time:.2f}s"
             print(Formatter.apply('bold', 'cyan', txt))
         else:
-            txt = f">>> ERROR! Model generated invalid JSON in {gen_time:.2f}s"
+            txt = f">>> ERROR! Model invalid JSON in {gen_time:.2f}s"
             print(Formatter.apply('bold', 'red', txt))
         print(Formatter.apply(None, 'gray', "-" * 70))
 
@@ -51,22 +55,28 @@ class Visualizer:
         """Renders the final parsed data in a clean tree structure."""
         print("JSON render")
         prompt = item.get("prompt", "Unknown Prompt")
-        print(Formatter.apply(None, 'gray', f" ├─ Prompt: ") + prompt)
+        print(Formatter.apply(None, 'gray', " ├─ Prompt: ") + prompt)
 
         if "error" in item:
-            print(Formatter.apply('bold', 'red', f" ├─ ❌ Generation Error: {item['error']}"))
+            err = item['error']
+            print(Formatter.apply('bold', 'red', f" ├─ ❌ Error: {err}"))
             return
 
         name = item.get("name", "MISSING_NAME")
         args_dict = item.get("parameters", {})
 
-        print(Formatter.apply(None, 'gray', f" ├─ Name: ") + Formatter.apply('bold', 'lime', name))
+        lbl = Formatter.apply(None, 'gray', " ├─ Name: ")
+        val = Formatter.apply('bold', 'lime', name)
+        print(lbl + val)
 
         if not args_dict:
-            print(Formatter.apply(None, 'gray', f" └─ Parameters: ") + Formatter.apply('bold', 'yellow', "{ } (Empty)"))
+            print(Formatter.apply(None, 'gray', " └─ Parameters: ") +
+                  Formatter.apply('bold', 'yellow', "{ } (Empty)"))
         else:
-            print(Formatter.apply(None, 'gray', f" └─ Parameters: "))
+            print(Formatter.apply(None, 'gray', " └─ Parameters: "))
             arg_items = list(args_dict.items())
             for i, (key, val) in enumerate(arg_items):
-                connector = "    └─" if i == len(arg_items) - 1 else "    ├─"
-                print(Formatter.apply(None, 'gray', f"{connector} {key}: ") + Formatter.apply(None, 'white', str(val)))
+                conn = "    └─" if i == len(arg_items) - 1 else "    ├─"
+                lbl_key = Formatter.apply(None, 'gray', f"{conn} {key}: ")
+                val_str = Formatter.apply(None, 'white', str(val))
+                print(lbl_key + val_str)

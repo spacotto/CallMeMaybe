@@ -22,7 +22,8 @@ dev = [
 exclude = [
     ".venv",
     "tests",
-    "llm_sdk"
+    "llm_sdk",
+    "moulinette"
 ]
 
 [tool.uv.workspace]

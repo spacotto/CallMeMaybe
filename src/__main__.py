@@ -4,7 +4,12 @@ import json
 import os
 from typing import List
 
-from src.engine import FunctionClassifier, ParameterExtractor, NestedExtractor, PostProcessor
+from src.engine import (
+    FunctionClassifier,
+    ParameterExtractor,
+    NestedExtractor,
+    PostProcessor
+)
 from src.parser import SchemaParser
 from src.utils import Formatter, error
 from src.visualizer import Visualizer
@@ -41,11 +46,9 @@ def main() -> None:
         error(f"CLI Initialization failed: {e}")
         return
 
-    print(
-        Formatter.apply(
-            'bold', 'yellow', ">>> Initializing Three-Stage Pipeline..."
-        )
-    )
+    print(Formatter.apply(
+        'bold', 'yellow', ">>> Initializing Three-Stage Pipeline..."
+    ))
     start_time = time.time()
 
     # --- MODEL INITIALIZATION ---
@@ -57,13 +60,11 @@ def main() -> None:
         slow_extractor = NestedExtractor(classifier_instance=classifier)
 
         elapsed = time.time() - start_time
-        print(
-            Formatter.apply(
-                'bold',
-                'cyan',
-                f">>> Engine loaded in {elapsed:.2f} seconds.\n\n"
-            )
-        )
+        print(Formatter.apply(
+            'bold',
+            'cyan',
+            f">>> Engine loaded in {elapsed:.2f} seconds.\n\n"
+        ))
 
     except Exception as e:
         error(f"Failed to load model architecture: {e}")
@@ -89,7 +90,8 @@ def main() -> None:
         ]
 
         print(Formatter.apply(None, 'gray', "-" * 70))
-        print(Formatter.apply('bold', 'yellow', f">>> Phase 1: Classifying {len(prompts)} prompts..."))
+        msg = f">>> Phase 1: Classifying {len(prompts)} prompts..."
+        print(Formatter.apply('bold', 'yellow', msg))
 
         target_names: List[str] = classifier.classify_batch(
             prompts, functions_schema
@@ -102,12 +104,16 @@ def main() -> None:
     # --- PHASE 2: PARAMETER EXTRACTION (ROUTED) ---
     try:
         print(Formatter.apply(None, 'gray', "-" * 70))
-        print(Formatter.apply('bold', 'yellow', ">>> Phase 2: Extracting parameters (Routed)..."))
+        print(Formatter.apply(
+                'bold',
+                'yellow',
+                ">>> Phase 2: Extracting parameters (Routed)..."
+            ))
         print(Formatter.apply(None, 'gray', "-" * 70))
 
         generation_start = time.time()
 
-        # Step 1: Split the Batch using the SchemaParser
+        # Step 1: Split the Batch
         flat_prompts, flat_names, flat_indices = [], [], []
         nested_prompts, nested_names, nested_indices = [], [], []
 
@@ -129,7 +135,7 @@ def main() -> None:
                 function_names=flat_names,
                 functions=functions_schema,
                 max_new_tokens=120,
-                verbose=args.verbose
+                verbose=True
             )
 
         # Step 3: Process Slow Path (Nested Schemas)
@@ -139,8 +145,8 @@ def main() -> None:
                 prompts=nested_prompts,
                 function_names=nested_names,
                 functions=functions_schema,
-                max_new_tokens=180, # Nested logic takes more tokens!
-                verbose=args.verbose
+                max_new_tokens=180,
+                verbose=True
             )
 
         # Step 4: Reconstruct Original Batch Order
@@ -159,7 +165,7 @@ def main() -> None:
     # --- PHASE 3: POST-PROCESSING ---
     results = []
     try:
-        print(Formatter.apply('bold', 'yellow', ">>> Phase 3: Validating output..."))
+        print(Formatter.apply('bold', 'yellow', ">>> Phase 3: Validating..."))
         print(Formatter.apply(None, 'gray', "-" * 70))
 
         for idx, (prompt, target_name, json_result_str) in enumerate(
@@ -167,7 +173,9 @@ def main() -> None:
         ):
             try:
                 if args.verbose:
-                    Visualizer.print_prompt_start(idx + 1, len(prompts), prompt)
+                    Visualizer.print_prompt_start(
+                        idx + 1, len(prompts), prompt
+                    )
 
                 final_item = PostProcessor.process_result(
                     prompt,
@@ -177,24 +185,26 @@ def main() -> None:
                 )
                 results.append(final_item)
 
-                is_valid_json = "error" not in final_item
-                if not is_valid_json:
-                    error(f"Model generated invalid JSON for prompt {idx+1}")
+                is_valid = "error" not in final_item
+                if not is_valid:
+                    error(f"Invalid JSON for prompt {idx+1}")
 
                 if args.verbose:
-                    Visualizer.print_generation_time(avg_gen_time, is_valid=is_valid_json)
+                    Visualizer.print_generation_time(
+                        avg_gen_time, is_valid=is_valid
+                    )
                     Visualizer.print_json_render(final_item)
 
             except Exception as item_e:
                 error(f"Critical Parsing Error on item {idx+1}: {item_e}")
                 results.append({
                     "prompt": prompt,
-                    "error": f"Internal Processing Error: {item_e}",
+                    "error": f"Internal Error: {item_e}",
                     "raw": json_result_str
                 })
 
     except Exception as e:
-        error(f"Phase 3 (Post-Processing loop) failed: {e}")
+        error(f"Phase 3 (Post-Processing) failed: {e}")
 
     # --- OUTPUT SAVING ---
     try:
@@ -202,16 +212,19 @@ def main() -> None:
         with open(args.output, 'w', encoding='utf-8') as output_file:
             json.dump(results, output_file, indent=4)
 
-        print(Formatter.apply('bold', 'cyan', f"\n\n 💾 All results successfully saved to {args.output}"))
+        msg = f"\n\n 💾 All results saved to {args.output}"
+        print(Formatter.apply('bold', 'cyan', msg))
+
         final_time = time.time() - start
         if final_time < 60:
-            stopwatch = f' ⏳ Pipeline execution completed in {final_time:.1f}s\n'
+            stopwatch = f' ⏳ Pipeline completed in {final_time:.1f}s\n'
         else:
-            stopwatch = f' ⏳ Pipeline execution completed in {final_time / 60:.1f}m\n'
+            stopwatch = f' ⏳ Pipeline completed in {final_time/60:.1f}m\n'
         print(Formatter.apply('bold', 'lime', stopwatch))
 
     except Exception as e:
         error(f"Failed to save results: {e}")
+
 
 if __name__ == "__main__":
     main()

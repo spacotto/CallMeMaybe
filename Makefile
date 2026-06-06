@@ -13,7 +13,7 @@ TESTDIR	 := tests
 
 MYPY     := $(UV) run mypy
 FLAKE8   := $(UV) run flake8
-EXCLUDE	 := --extend-exclude=$(VENV),$(TESTDIR),$(LLM)
+EXCLUDE	 := --extend-exclude=$(VENV),$(TESTDIR),$(LLM),moulinette
 
 FUNC_DEF := data/input/functions_definition.json
 INPUT_F	 := data/input/function_calling_tests.json

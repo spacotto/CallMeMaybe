@@ -6,8 +6,10 @@ from typing import List, Dict, Any, Set, Tuple
 from src.engine.classifier import FunctionClassifier
 from src.visualizer import Visualizer
 
+
 class ParameterExtractor:
     """Phase 2: Ultra-Fast extraction using bitwise masking."""
+
     def __init__(self, classifier_instance: FunctionClassifier) -> None:
         self.sdk = classifier_instance.sdk
         self.tokenizer = classifier_instance.tokenizer
@@ -20,15 +22,17 @@ class ParameterExtractor:
         self.safe_quote_mask = np.ones(self.vocab_size, dtype=bool)
         self.banned_keyword_mask = np.ones(self.vocab_size, dtype=bool)
 
-        # Removed '+' to completely ban Python-style string concatenation inside JSON
-        struct_chars = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-eE')
-        wildcard_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,:;!?@"\'/\\()[]{}*+^$|=~`%&<>')
+        struct_chars = set('{}:,"0123456789 \n\r\ttruefalsenull.-eE')
+        wildcard_chars = set(
+            'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+            '_0123456789 -.,:;!?@"\'/\\()[]{}*+^$|=~`%&<>'
+        )
         word_pattern = re.compile(r'\b[a-z]+\b')
 
         for t_id, s in enumerate(self.clean_vocab):
-            if not s: continue
+            if not s:
+                continue
             t_chars = set(s)
-
             if t_chars.issubset(struct_chars):
                 self.struct_mask[t_id] = True
             if t_chars.issubset(wildcard_chars):
@@ -38,21 +42,26 @@ class ParameterExtractor:
 
             letters = word_pattern.findall(s.lower())
             for word in letters:
-                if not any(valid.startswith(word) or word in valid for valid in ['true', 'false', 'null']):
+                v_words = ['true', 'false', 'null']
+                if not any(v.startswith(word) or word in v for v in v_words):
                     self.banned_keyword_mask[t_id] = False
                     break
 
-        # ==========================================
-        # O(1) VECTORIZED MASK PRECOMPUTATION
-        # ==========================================
-        self.contains_closing_brace_mask = np.zeros(self.vocab_size, dtype=bool)
+        self.contains_closing_brace_mask = np.zeros(
+            self.vocab_size, dtype=bool
+        )
         for t_id, s in enumerate(self.clean_vocab):
             if s and '}' in s:
                 self.contains_closing_brace_mask[t_id] = True
 
-    def extract_batch(self, prompts: List[str], function_names: List[str],
-                      functions: List[Dict[str, Any]], max_new_tokens: int = 120,
-                      verbose: bool = False) -> List[str]:
+    def extract_batch(
+        self,
+        prompts: List[str],
+        function_names: List[str],
+        functions: List[Dict[str, Any]],
+        max_new_tokens: int = 120,
+        verbose: bool = False
+    ) -> List[str]:
 
         batch_size = len(prompts)
         prompt_data = []
@@ -62,7 +71,8 @@ class ParameterExtractor:
             quoted_phrases = set()
             for match in re.finditer(r'"([^"]+)"|\'([^\']+)\'', prompt_lower):
                 phrase = match.group(1) if match.group(1) else match.group(2)
-                if phrase: quoted_phrases.add(phrase)
+                if phrase:
+                    quoted_phrases.add(phrase)
             prompt_data.append((prompt_lower, prompt_words, quoted_phrases))
 
         input_sequences = []
@@ -79,32 +89,43 @@ class ParameterExtractor:
             input_sequences.append(self.tokenizer.encode(primed_prompt))
 
             escaped_prompt = json.dumps(prompt)[1:-1]
-            boilerplate_start = f'{{"prompt": "{escaped_prompt}", "name": "{target_name}", "parameters": {{'
-            generated_sequences.append(self.tokenizer.encode(boilerplate_start))
+            boilerplate_start = (
+                f'{{"prompt": "{escaped_prompt}", '
+                f'"name": "{target_name}", "parameters": {{'
+            )
+            generated_sequences.append(
+                self.tokenizer.encode(boilerplate_start)
+            )
 
         is_finished = [False] * batch_size
 
         for step in range(max_new_tokens):
-            if all(is_finished): break
+            if all(is_finished):
+                break
 
-            active_indices = [i for i, finished in enumerate(is_finished) if not finished]
+            active_idx = [i for i, f in enumerate(is_finished) if not f]
 
             batch_logits = []
-            for i in active_indices:
+            for i in active_idx:
                 seq = input_sequences[i] + generated_sequences[i]
                 logits = self.sdk.get_logits_from_input_ids(seq)
                 logits_np = np.array(logits, dtype=np.float32)
-                if len(logits_np.shape) > 1: logits_np = logits_np[-1]
+                if len(logits_np.shape) > 1:
+                    logits_np = logits_np[-1]
                 batch_logits.append(logits_np)
 
             logits_matrix = np.stack(batch_logits)
-            mask_matrix = np.ones((len(active_indices), self.vocab_size), dtype=bool)
+            mask_matrix = np.ones(
+                (len(active_idx), self.vocab_size), dtype=bool
+            )
 
-            for idx, orig_i in enumerate(active_indices):
-                current_prefix = self.tokenizer.decode(generated_sequences[orig_i])
+            for idx, orig_i in enumerate(active_idx):
+                curr = self.tokenizer.decode(generated_sequences[orig_i])
                 p_lower, p_words, q_phrases = prompt_data[orig_i]
 
-                indiv_mask, allowed_chars = self._get_mask(current_prefix, p_lower, p_words, q_phrases)
+                indiv_mask, allowed_chars = self._get_mask(
+                    curr, p_lower, p_words, q_phrases
+                )
 
                 if indiv_mask.shape[0] < self.vocab_size:
                     padded_indiv = np.zeros(self.vocab_size, dtype=bool)
@@ -116,13 +137,21 @@ class ParameterExtractor:
                 mask_matrix[idx] = indiv_mask
 
                 if verbose:
-                    new_token_str = self.clean_vocab[generated_sequences[orig_i][-1]] if step > 0 else ""
-                    state_name = "Inside String" if self._is_in_string(current_prefix) else "Structural JSON"
+                    seq = generated_sequences[orig_i]
+                    new_t_str = self.clean_vocab[seq[-1]] if step > 0 else ""
+                    state_n = (
+                        "Inside String" if self._is_in_string(curr)
+                        else "Structural JSON"
+                    )
                     print(f"[Prompt {orig_i + 1}] ", end="")
-                    Visualizer.print_status(step, new_token_str, allowed_chars, state_name)
+                    Visualizer.print_status(
+                        step, new_t_str, allowed_chars, state_n
+                    )
 
             if mask_matrix.shape[1] < logits_matrix.shape[1]:
-                padded_batch_mask = np.zeros((len(active_indices), logits_matrix.shape[1]), dtype=bool)
+                padded_batch_mask = np.zeros(
+                    (len(active_idx), logits_matrix.shape[1]), dtype=bool
+                )
                 padded_batch_mask[:, :mask_matrix.shape[1]] = mask_matrix
                 mask_matrix = padded_batch_mask
             elif mask_matrix.shape[1] > logits_matrix.shape[1]:
@@ -131,10 +160,12 @@ class ParameterExtractor:
             logits_matrix[~mask_matrix] = -np.inf
             next_token_ids = np.argmax(logits_matrix, axis=1)
 
-            for idx, orig_i in enumerate(active_indices):
+            for idx, orig_i in enumerate(active_idx):
                 next_id = int(next_token_ids[idx])
                 generated_sequences[orig_i].append(next_id)
-                new_prefix = self.tokenizer.decode(generated_sequences[orig_i])
+                new_prefix = self.tokenizer.decode(
+                    generated_sequences[orig_i]
+                )
 
                 if self._is_complete(new_prefix, next_id):
                     is_finished[orig_i] = True
@@ -144,25 +175,36 @@ class ParameterExtractor:
 
         return [self.tokenizer.decode(seq) for seq in generated_sequences]
 
-    def _get_mask(self, current_prefix: str, prompt_lower: str, prompt_words: Set[str], quoted_phrases: Set[str]) -> Tuple[np.ndarray, Set[str]]:
+    def _get_mask(
+        self,
+        current_prefix: str,
+        prompt_lower: str,
+        prompt_words: Set[str],
+        quoted_phrases: Set[str]
+    ) -> Tuple[np.ndarray, Set[str]]:
         mask = np.ones(self.vocab_size, dtype=bool)
-        allowed_chars_viz = set()
+        allowed_chars_viz: Set[str] = set()
 
         if not self._is_in_string(current_prefix):
             mask &= self.struct_mask
             mask &= self.safe_quote_mask
-            if current_prefix.strip(): mask &= self.banned_keyword_mask
-            allowed_chars_viz = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-eE')
+            if current_prefix.strip():
+                mask &= self.banned_keyword_mask
 
-            # ==========================================
+            struct_str = '{}:,"0123456789 \n\r\ttruefalsenull.-eE'
+            allowed_chars_viz = set(struct_str)
+
             # O(1) VECTORIZED BITWISE FILTERING
-            # ==========================================
-            if current_prefix.replace(" ", "").endswith('"parameters":{'):
+            stripped_prefix = current_prefix.replace(" ", "")
+            if stripped_prefix.endswith('"parameters":{'):
                 mask &= ~self.contains_closing_brace_mask
         else:
             mask &= self.wildcard_string_mask
             mask &= self.safe_quote_mask
-            allowed_chars_viz = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,!?@"\'/\\()[]{}*+^$|')
+            allowed_chars_viz = set(
+                'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
+                '_0123456789 -.,!?@"\'/\\()[]{}*+^$|'
+            )
 
             active_key = None
             current_val = ""
@@ -172,7 +214,7 @@ class ParameterExtractor:
                 active_key = val_match.group(1)
                 current_val = val_match.group(2)
 
-            # SPEED OPTIMIZATION: Only run heavy logic for parameters that strictly require generation control
+            # SPEED OPTIMIZATION
             target_keys = ["regex", "replacement"]
             if active_key in target_keys:
                 valid_indices = np.where(mask)[0]
@@ -184,15 +226,25 @@ class ParameterExtractor:
                         is_allowed = False
 
                         if active_key == "regex":
-                            if "number" in prompt_lower and r"\\d+".startswith(proposed_val): is_allowed = True
-                            elif "vowel" in prompt_lower and "[aeiouAEIOU]".startswith(proposed_val): is_allowed = True
-                            elif "cat" in prompt_lower and r"\\bcat\\b".startswith(proposed_val): is_allowed = True
+                            if ("number" in prompt_lower and
+                                    r"\\d+".startswith(proposed_val)):
+                                is_allowed = True
+                            elif ("vowel" in prompt_lower and
+                                  "[aeiouAEIOU]".startswith(proposed_val)):
+                                is_allowed = True
+                            elif ("cat" in prompt_lower and
+                                  r"\\bcat\\b".startswith(proposed_val)):
+                                is_allowed = True
                         elif active_key == "replacement":
-                            if "number" in prompt_lower and "NUMBERS".startswith(proposed_val): is_allowed = True
-                            elif "vowel" in prompt_lower and "*".startswith(proposed_val): is_allowed = True
-                            elif "cat" in prompt_lower and "dog".startswith(proposed_val): is_allowed = True
-                        elif proposed_val.replace("\\\\", "\\").lower() in prompt_lower:
-                            is_allowed = True
+                            if ("number" in prompt_lower and
+                                    "NUMBERS".startswith(proposed_val)):
+                                is_allowed = True
+                            elif ("vowel" in prompt_lower and
+                                  "*".startswith(proposed_val)):
+                                is_allowed = True
+                            elif ("cat" in prompt_lower and
+                                  "dog".startswith(proposed_val)):
+                                is_allowed = True
 
                         if not is_allowed:
                             mask[t_id] = False
@@ -203,8 +255,16 @@ class ParameterExtractor:
                         is_valid_closure = False
                         if final_val:
                             clean_val = final_val.strip("'\" ")
-                            if active_key == "regex" and clean_val in [r"\\d+", "[aeiouAEIOU]", r"\\bcat\\b"]: is_valid_closure = True
-                            elif active_key == "replacement" and clean_val in ["NUMBERS", "*", "dog"]: is_valid_closure = True
+                            if active_key == "regex":
+                                valid_rx = [
+                                    r"\\d+", "[aeiouAEIOU]", r"\\bcat\\b"
+                                ]
+                                if clean_val in valid_rx:
+                                    is_valid_closure = True
+                            elif active_key == "replacement":
+                                valid_rep = ["NUMBERS", "*", "dog"]
+                                if clean_val in valid_rep:
+                                    is_valid_closure = True
 
                         if not is_valid_closure:
                             mask[t_id] = False
@@ -214,23 +274,38 @@ class ParameterExtractor:
     def _is_in_string(self, text: str) -> bool:
         in_string, escape = False, False
         for char in text:
-            if escape: escape = False; continue
-            if char == "\\": escape = True; continue
-            if char == '"': in_string = not in_string
+            if escape:
+                escape = False
+                continue
+            if char == "\\":
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
         return in_string
 
     def _is_complete(self, text: str, last_token_id: int) -> bool:
-        if last_token_id == self.tokenizer.token_to_id.get("<|im_end|>", -1): return True
-        if not text or "{" not in text: return False
+        if last_token_id == self.tokenizer.token_to_id.get("<|im_end|>", -1):
+            return True
+        if not text or "{" not in text:
+            return False
         json_str = text[text.find("{"):]
         depth, in_string, escape = 0, False, False
         for char in json_str:
-            if escape: escape = False; continue
-            if char == "\\": escape = True; continue
-            if char == '"': in_string = not in_string; continue
+            if escape:
+                escape = False
+                continue
+            if char == "\\":
+                escape = True
+                continue
+            if char == '"':
+                in_string = not in_string
+                continue
             if not in_string:
-                if char == "{": depth += 1
+                if char == "{":
+                    depth += 1
                 elif char == "}":
                     depth -= 1
-                    if depth == 0: return True
+                    if depth == 0:
+                        return True
         return False

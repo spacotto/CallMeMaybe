@@ -1,12 +1,15 @@
 from typing import Set, List, Optional
 
+
 class TrieNode:
     def __init__(self) -> None:
         self.children: dict[str, 'TrieNode'] = {}
         self.is_end: bool = False
 
+
 class SchemaTrie:
     """A character-level Prefix Tree for dynamic token masking."""
+
     def __init__(self, allowed_strings: List[str]) -> None:
         self.root = TrieNode()
         for word in allowed_strings:
@@ -40,12 +43,17 @@ class SchemaTrie:
         return allowed
 
     def is_valid_suffix(self, start_node: TrieNode, suffix: str) -> bool:
-        """Validates a suffix starting from a specific node, skipping prefix traversal."""
+        """
+        Validates a suffix starting from a specific node,
+        skipping prefix traversal.
+        """
         node = start_node
         for i, char in enumerate(suffix):
             if char == '"':
-                # Valid ONLY if it's the final character and the word is complete
-                if node.is_end and i == len(suffix) - 1:
+                # Valid ONLY if it's the final character and the word
+                # is complete
+                is_last_char = (i == len(suffix) - 1)
+                if node.is_end and is_last_char:
                     return True
                 return False
             if char not in node.children:

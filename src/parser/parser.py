@@ -5,8 +5,12 @@ from pydantic import BaseModel, Field
 
 from src.utils import error
 
+
 class SchemaParser(BaseModel):
-    file_path: str = Field(..., description="Path to the functions definition JSON file")
+    file_path: str = Field(
+        ...,
+        description="Path to the functions definition JSON file"
+    )
 
     def load_functions(self) -> List[Dict[str, Any]]:
         if not os.path.exists(self.file_path):
@@ -21,7 +25,8 @@ class SchemaParser(BaseModel):
                 error("Invalid schema format: Root element must be a list.")
                 return []
 
-            # Bypass strict Pydantic validation to flawlessly preserve nested schemas
+            # Bypass strict Pydantic validation to flawlessly preserve
+            # nested schemas
             return raw_data
 
         except json.JSONDecodeError as e:
@@ -32,7 +37,9 @@ class SchemaParser(BaseModel):
             return []
 
     @staticmethod
-    def is_nested(target_name: str, functions_schema: List[Dict[str, Any]]) -> bool:
+    def is_nested(
+        target_name: str, functions_schema: List[Dict[str, Any]]
+    ) -> bool:
         for f_schema in functions_schema:
             if f_schema.get("name") == target_name:
                 params = f_schema.get("parameters", {})
