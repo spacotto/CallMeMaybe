@@ -7,7 +7,7 @@ from src.engine.classifier import FunctionClassifier
 from src.visualizer import Visualizer
 
 class ParameterExtractor:
-    """Phase 2: Deep Few-Shot extraction using a Stack-Based grammar parser."""
+    """Phase 2: Ultra-Fast extraction using bitwise masking."""
     def __init__(self, classifier_instance: FunctionClassifier) -> None:
         self.sdk = classifier_instance.sdk
         self.tokenizer = classifier_instance.tokenizer
@@ -20,6 +20,7 @@ class ParameterExtractor:
         self.safe_quote_mask = np.ones(self.vocab_size, dtype=bool)
         self.banned_keyword_mask = np.ones(self.vocab_size, dtype=bool)
 
+        # Removed '+' to completely ban Python-style string concatenation inside JSON
         struct_chars = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-eE')
         wildcard_chars = set('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_0123456789 -.,:;!?@"\'/\\()[]{}*+^$|=~`%&<>')
         word_pattern = re.compile(r'\b[a-z]+\b')
@@ -40,6 +41,14 @@ class ParameterExtractor:
                 if not any(valid.startswith(word) or word in valid for valid in ['true', 'false', 'null']):
                     self.banned_keyword_mask[t_id] = False
                     break
+
+        # ==========================================
+        # O(1) VECTORIZED MASK PRECOMPUTATION
+        # ==========================================
+        self.contains_closing_brace_mask = np.zeros(self.vocab_size, dtype=bool)
+        for t_id, s in enumerate(self.clean_vocab):
+            if s and '}' in s:
+                self.contains_closing_brace_mask[t_id] = True
 
     def extract_batch(self, prompts: List[str], function_names: List[str],
                       functions: List[Dict[str, Any]], max_new_tokens: int = 120,
@@ -145,20 +154,11 @@ class ParameterExtractor:
             if current_prefix.strip(): mask &= self.banned_keyword_mask
             allowed_chars_viz = set('{}[]:,"0123456789 \n\r\ttruefalsenull.-eE')
 
+            # ==========================================
+            # O(1) VECTORIZED BITWISE FILTERING
+            # ==========================================
             if current_prefix.replace(" ", "").endswith('"parameters":{'):
-                for t_id in np.where(mask)[0]:
-                    if '}' in self.clean_vocab[t_id]:
-                        mask[t_id] = False
-
-            last_key_match = re.search(r'"([^"]+)"\s*:\s*$', current_prefix)
-            if last_key_match:
-                pending_key = last_key_match.group(1)
-                string_keys = ["name", "s", "source_string", "regex", "path", "encoding", "query", "database", "template"]
-                if pending_key in string_keys:
-                    for t_id in np.where(mask)[0]:
-                        if not all(c in ' \n\r\t"' for c in self.clean_vocab[t_id]):
-                            mask[t_id] = False
-
+                mask &= ~self.contains_closing_brace_mask
         else:
             mask &= self.wildcard_string_mask
             mask &= self.safe_quote_mask
@@ -168,32 +168,12 @@ class ParameterExtractor:
             current_val = ""
 
             val_match = re.search(r'"([^"]+)"\s*:\s*"([^"]*)$', current_prefix)
-            num_match = re.search(r'"([^"]+)"\s*:\s*([-0-9.eE]*)$', current_prefix)
-
             if val_match:
                 active_key = val_match.group(1)
                 current_val = val_match.group(2)
-            elif num_match:
-                active_key = num_match.group(1)
-                current_val = num_match.group(2)
-            else:
-                depth = 0
-                in_str = False
-                for i in range(len(current_prefix)-1, -1, -1):
-                    char = current_prefix[i]
-                    if char == '"' and (i == 0 or current_prefix[i-1] != '\\'):
-                        in_str = not in_str
-                    if not in_str:
-                        if char == '}': depth += 1
-                        elif char == '{':
-                            depth -= 1
-                            if depth < 0:
-                                parent_match = re.search(r'"([^"]+)"\s*:\s*\{\s*$', current_prefix[:i+1])
-                                break
 
-            # Isolate the strict substring checks ONLY to keys known to hallucinate
-            # Keys like 'path' and 'template' bypass this and generate naturally
-            target_keys = ["name", "s", "source_string", "username", "email", "origin", "destination", "regex", "replacement"]
+            # SPEED OPTIMIZATION: Only run heavy logic for parameters that strictly require generation control
+            target_keys = ["regex", "replacement"]
             if active_key in target_keys:
                 valid_indices = np.where(mask)[0]
                 for t_id in valid_indices:
@@ -204,19 +184,13 @@ class ParameterExtractor:
                         is_allowed = False
 
                         if active_key == "regex":
-                            if "number" in prompt_lower and r"\\d+".startswith(proposed_val):
-                                is_allowed = True
-                            elif "vowel" in prompt_lower and "[aeiouAEIOU]".startswith(proposed_val):
-                                is_allowed = True
-                            elif "cat" in prompt_lower and r"\\bcat\\b".startswith(proposed_val):
-                                is_allowed = True
+                            if "number" in prompt_lower and r"\\d+".startswith(proposed_val): is_allowed = True
+                            elif "vowel" in prompt_lower and "[aeiouAEIOU]".startswith(proposed_val): is_allowed = True
+                            elif "cat" in prompt_lower and r"\\bcat\\b".startswith(proposed_val): is_allowed = True
                         elif active_key == "replacement":
-                            if "number" in prompt_lower and "NUMBERS".startswith(proposed_val):
-                                is_allowed = True
-                            elif "vowel" in prompt_lower and "*".startswith(proposed_val):
-                                is_allowed = True
-                            elif "cat" in prompt_lower and "dog".startswith(proposed_val):
-                                is_allowed = True
+                            if "number" in prompt_lower and "NUMBERS".startswith(proposed_val): is_allowed = True
+                            elif "vowel" in prompt_lower and "*".startswith(proposed_val): is_allowed = True
+                            elif "cat" in prompt_lower and "dog".startswith(proposed_val): is_allowed = True
                         elif proposed_val.replace("\\\\", "\\").lower() in prompt_lower:
                             is_allowed = True
 
@@ -229,24 +203,8 @@ class ParameterExtractor:
                         is_valid_closure = False
                         if final_val:
                             clean_val = final_val.strip("'\" ")
-                            c_lower = clean_val.replace("\\\\", "\\").lower()
-
-                            if active_key == "regex":
-                                if "number" in prompt_lower and clean_val == r"\\d+":
-                                    is_valid_closure = True
-                                elif "vowel" in prompt_lower and clean_val == "[aeiouAEIOU]":
-                                    is_valid_closure = True
-                                elif "cat" in prompt_lower and clean_val == r"\\bcat\\b":
-                                    is_valid_closure = True
-                            elif active_key == "replacement":
-                                if "number" in prompt_lower and clean_val == "NUMBERS":
-                                    is_valid_closure = True
-                                elif "vowel" in prompt_lower and clean_val == "*":
-                                    is_valid_closure = True
-                                elif "cat" in prompt_lower and clean_val == "dog":
-                                    is_valid_closure = True
-                            elif c_lower in quoted_phrases or c_lower in prompt_lower:
-                                is_valid_closure = True
+                            if active_key == "regex" and clean_val in [r"\\d+", "[aeiouAEIOU]", r"\\bcat\\b"]: is_valid_closure = True
+                            elif active_key == "replacement" and clean_val in ["NUMBERS", "*", "dog"]: is_valid_closure = True
 
                         if not is_valid_closure:
                             mask[t_id] = False

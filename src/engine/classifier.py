@@ -8,7 +8,7 @@ from llm_sdk import Small_LLM_Model
 from src.engine.trie import SchemaTrie
 
 class FunctionClassifier:
-    """Phase 1: Ultra-fast Zero-Shot classification to identify the target function."""
+    """Phase 1: Ultra-fast Zero-Shot classification with O(1) lazy caching."""
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         self.sdk = Small_LLM_Model(model_name=model_name)
         self.tokenizer = Tokenizer()
@@ -25,6 +25,9 @@ class FunctionClassifier:
 
         for t_id, t_str in self.tokenizer.id_to_token.items():
             self.clean_vocab[t_id] = t_str.replace("Ġ", " ")
+
+        # O(1) Lazy Cache for bitwise masks
+        self.prefix_mask_cache = {}
 
     def classify_batch(self, prompts: List[str], functions: List[Dict[str, Any]], max_new_tokens: int = 30) -> List[str]:
         batch_size = len(prompts)
@@ -45,7 +48,6 @@ class FunctionClassifier:
         is_finished = [False] * batch_size
         extracted_names = [""] * batch_size
 
-        # Classification Loop
         for step in range(max_new_tokens):
             if all(is_finished):
                 break
@@ -69,12 +71,20 @@ class FunctionClassifier:
                 parts = current_prefix.rsplit('"', 1)
                 current_name_prefix = parts[1] if len(parts) > 1 else ""
 
-                start_node = name_trie.get_node(current_name_prefix)
-                if start_node is not None:
-                    for t_id in range(self.vocab_size):
-                        s = self.clean_vocab[t_id]
-                        if s and name_trie.is_valid_suffix(start_node, s):
-                            mask_matrix[idx, t_id] = True
+                # ==========================================
+                # O(1) LAZY CACHING OPTIMIZATION
+                # ==========================================
+                if current_name_prefix not in self.prefix_mask_cache:
+                    valid_mask = np.zeros(self.vocab_size, dtype=bool)
+                    start_node = name_trie.get_node(current_name_prefix)
+                    if start_node is not None:
+                        for t_id in range(self.vocab_size):
+                            s = self.clean_vocab[t_id]
+                            if s and name_trie.is_valid_suffix(start_node, s):
+                                valid_mask[t_id] = True
+                    self.prefix_mask_cache[current_name_prefix] = valid_mask
+
+                mask_matrix[idx, :] = self.prefix_mask_cache[current_name_prefix]
 
             # Align Mask Shape
             if mask_matrix.shape[1] < logits_matrix.shape[1]:

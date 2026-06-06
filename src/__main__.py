@@ -57,7 +57,7 @@ def main() -> None:
             Formatter.apply(
                 'bold',
                 'cyan',
-                f">>> Engine loaded in {elapsed:.2f} seconds.\n"
+                f">>> Engine loaded in {elapsed:.2f} seconds.\n\n"
             )
         )
 
@@ -78,20 +78,15 @@ def main() -> None:
         with open(args.input, 'r', encoding='utf-8') as f:
             input_data = json.load(f)
 
-        # Enforce strict List[str] type formatting to resolve mypy errors
         prompts: List[str] = [
             str(item.get("prompt", ""))
             for item in input_data
             if isinstance(item, dict) and "prompt" in item
         ]
 
-        print(
-            Formatter.apply(
-                'bold',
-                'purple',
-                f">>> Classifying {len(prompts)} prompts..."
-            )
-        )
+        print(Formatter.apply(None, 'gray', "-" * 70))
+        print(Formatter.apply('bold', 'yellow', f">>> Phase 1: Classifying {len(prompts)} prompts..."))
+
         target_names: List[str] = classifier.classify_batch(
             prompts, functions_schema
         )
@@ -102,14 +97,18 @@ def main() -> None:
 
     # --- PHASE 2: PARAMETER EXTRACTION ---
     try:
-        print(
-            Formatter.apply(
-                'bold', 'blue', ">>> Extracting parameters..."
-            )
-        )
+        print(Formatter.apply(None, 'gray', "-" * 70))
+        print(Formatter.apply('bold', 'yellow', ">>> Phase 2: Extracting parameters..."))
+        print(Formatter.apply(None, 'gray', "-" * 70))
+
         generation_start = time.time()
+
         json_results: List[str] = extractor.extract_batch(
-            prompts, target_names
+            prompts=prompts,
+            function_names=target_names,
+            functions=functions_schema,
+            max_new_tokens=120,
+            verbose=True
         )
         avg_gen_time = (time.time() - generation_start) / max(1, len(prompts))
 
@@ -120,13 +119,15 @@ def main() -> None:
     # --- PHASE 3: POST-PROCESSING ---
     results = []
     try:
+        print(Formatter.apply('bold', 'yellow', ">>> Phase 3: Validating output..."))
+        print(Formatter.apply(None, 'gray', "-" * 70))
+
         for idx, (prompt, target_name, json_result_str) in enumerate(
             zip(prompts, target_names, json_results)
         ):
             try:
-                Visualizer.print_prompt_start(
-                    idx + 1, len(prompts), prompt
-                )
+                if args.verbose:
+                    Visualizer.print_prompt_start(idx + 1, len(prompts), prompt)
 
                 final_item = PostProcessor.process_result(
                     prompt,
@@ -140,10 +141,9 @@ def main() -> None:
                 if not is_valid_json:
                     error(f"Model generated invalid JSON for prompt {idx+1}")
 
-                Visualizer.print_generation_time(
-                    avg_gen_time, is_valid=is_valid_json
-                )
-                Visualizer.print_json_render(final_item)
+                if args.verbose:
+                    Visualizer.print_generation_time(avg_gen_time, is_valid=is_valid_json)
+                    Visualizer.print_json_render(final_item)
 
             except Exception as item_e:
                 error(f"Critical Parsing Error on item {idx+1}: {item_e}")
@@ -162,17 +162,16 @@ def main() -> None:
         with open(args.output, 'w', encoding='utf-8') as output_file:
             json.dump(results, output_file, indent=4)
 
-        txt = f"\n 💾 All results successfully saved to {args.output}"
-        print(Formatter.apply('bold', 'cyan', txt))
+        print(Formatter.apply('bold', 'cyan', f"\n\n 💾 All results successfully saved to {args.output}"))
         final_time = time.time() - start
-        stopwatch = (
-            f' ⏳ Pipeline execution completed in '
-            f'{final_time / 60:.1f}m\n'
-        )
+        if final_time < 60:
+            stopwatch = f' ⏳ Pipeline execution completed in {final_time:.1f}s\n'
+        else:
+            stopwatch = f' ⏳ Pipeline execution completed in {final_time / 60:.1f}m\n'
         print(Formatter.apply('bold', 'lime', stopwatch))
+
     except Exception as e:
         error(f"Failed to save results: {e}")
-
 
 if __name__ == "__main__":
     main()
