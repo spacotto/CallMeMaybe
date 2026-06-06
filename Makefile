@@ -206,7 +206,7 @@ nested:
 	@$(PYTHON) -m src \
 	--functions_definition data/nested_input/nested_functions_definition.json \
 	--input data/nested_input/nested_function_calling_tests.json \
-	--output data/output/function_calls.json \
+	--output data/output/function_calls_nested.json \
 	--verbose
 
 # ------------------------------------------------------------

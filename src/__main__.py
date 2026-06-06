@@ -4,7 +4,7 @@ import json
 import os
 from typing import List
 
-from src.engine import FunctionClassifier, ParameterExtractor, PostProcessor
+from src.engine import FunctionClassifier, ParameterExtractor, NestedExtractor, PostProcessor
 from src.parser import SchemaParser
 from src.utils import Formatter, error
 from src.visualizer import Visualizer
@@ -51,7 +51,11 @@ def main() -> None:
     # --- MODEL INITIALIZATION ---
     try:
         classifier = FunctionClassifier(model_name="Qwen/Qwen3-0.6B")
-        extractor = ParameterExtractor(classifier_instance=classifier)
+
+        # Instantiate BOTH extraction paths
+        fast_extractor = ParameterExtractor(classifier_instance=classifier)
+        slow_extractor = NestedExtractor(classifier_instance=classifier)
+
         elapsed = time.time() - start_time
         print(
             Formatter.apply(
@@ -95,21 +99,57 @@ def main() -> None:
         error(f"Phase 1 (Classification) failed: {e}")
         return
 
-    # --- PHASE 2: PARAMETER EXTRACTION ---
+    # --- PHASE 2: PARAMETER EXTRACTION (ROUTED) ---
     try:
         print(Formatter.apply(None, 'gray', "-" * 70))
-        print(Formatter.apply('bold', 'yellow', ">>> Phase 2: Extracting parameters..."))
+        print(Formatter.apply('bold', 'yellow', ">>> Phase 2: Extracting parameters (Routed)..."))
         print(Formatter.apply(None, 'gray', "-" * 70))
 
         generation_start = time.time()
 
-        json_results: List[str] = extractor.extract_batch(
-            prompts=prompts,
-            function_names=target_names,
-            functions=functions_schema,
-            max_new_tokens=120,
-            verbose=True
-        )
+        # Step 1: Split the Batch using the SchemaParser
+        flat_prompts, flat_names, flat_indices = [], [], []
+        nested_prompts, nested_names, nested_indices = [], [], []
+
+        for idx, target_name in enumerate(target_names):
+            if SchemaParser.is_nested(target_name, functions_schema):
+                nested_prompts.append(prompts[idx])
+                nested_names.append(target_name)
+                nested_indices.append(idx)
+            else:
+                flat_prompts.append(prompts[idx])
+                flat_names.append(target_name)
+                flat_indices.append(idx)
+
+        # Step 2: Process Fast Path (Flat Schemas)
+        flat_results = []
+        if flat_prompts:
+            flat_results = fast_extractor.extract_batch(
+                prompts=flat_prompts,
+                function_names=flat_names,
+                functions=functions_schema,
+                max_new_tokens=120,
+                verbose=args.verbose
+            )
+
+        # Step 3: Process Slow Path (Nested Schemas)
+        nested_results = []
+        if nested_prompts:
+            nested_results = slow_extractor.extract_batch(
+                prompts=nested_prompts,
+                function_names=nested_names,
+                functions=functions_schema,
+                max_new_tokens=180, # Nested logic takes more tokens!
+                verbose=args.verbose
+            )
+
+        # Step 4: Reconstruct Original Batch Order
+        json_results = [""] * len(prompts)
+        for original_idx, result in zip(flat_indices, flat_results):
+            json_results[original_idx] = result
+        for original_idx, result in zip(nested_indices, nested_results):
+            json_results[original_idx] = result
+
         avg_gen_time = (time.time() - generation_start) / max(1, len(prompts))
 
     except Exception as e:

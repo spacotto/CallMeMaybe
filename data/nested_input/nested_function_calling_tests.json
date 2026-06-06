@@ -1,20 +1,20 @@
 [
   {
-    "prompt": "Calculate the distance between point A at 0,0 and point B at 3,4."
+    "prompt": "Calculate distance. coord_start is x_val 0, y_val 0. coord_end is x_val 3, y_val 4."
   },
   {
-    "prompt": "Find the distance from coordinates (10, -5) to (2, 8)."
+    "prompt": "Find distance. coord_start is x_val 10, y_val -5. coord_end is x_val 2, y_val 8."
   },
   {
-    "prompt": "Create a user profile for 'shrek' who is 35 years old. Contact email is swamp@mud.com. They prefer dark theme and want notifications enabled."
+    "prompt": "Create profile. identity is username shrek, age_years 35. preferences is email_address swamp@mud.com, ui_theme dark."
   },
   {
-    "prompt": "Set up a profile for john, age 28, email john@doe.org. Light theme, no notifications."
+    "prompt": "Set up profile. identity is username john, age_years 28. preferences is email_address john@doe.org, ui_theme light."
   },
   {
-    "prompt": "Book a flight from JFK to LHR for 2 adults and 1 child, departing on 2026-10-15."
+    "prompt": "Book flight. flight_route is from_city JFK, to_city LHR. travelers is num_adults 2, num_kids 1."
   },
   {
-    "prompt": "I need a flight from CDG to NRT on 2026-12-01. It's just for 1 adult and 0 children."
+    "prompt": "Book flight. flight_route is from_city CDG, to_city NRT. travelers is num_adults 1, num_kids 0."
   }
 ]

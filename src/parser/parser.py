@@ -1,11 +1,9 @@
 import json
 import os
 from typing import List, Dict, Any
-from pydantic import BaseModel, Field, ValidationError
+from pydantic import BaseModel, Field
 
-from src.parser.models import FunctionDefinition
-from src.utils import error, warning
-
+from src.utils import error
 
 class SchemaParser(BaseModel):
     file_path: str = Field(..., description="Path to the functions definition JSON file")
@@ -23,20 +21,8 @@ class SchemaParser(BaseModel):
                 error("Invalid schema format: Root element must be a list.")
                 return []
 
-            valid_functions: List[Dict[str, Any]] = []
-
-            for idx, func_dict in enumerate(raw_data):
-                try:
-                    validated_func = FunctionDefinition(**func_dict)
-                    valid_functions.append(validated_func.model_dump(exclude_none=True))
-
-                except ValidationError as ve:
-                    missing_field = ve.errors()[0].get('loc', ['Unknown'])[0]
-                    error_msg = ve.errors()[0].get('msg', 'Validation error')
-                    warning(f"Skipping function at index {idx}: Field '{missing_field}' -> {error_msg}")
-                    continue
-
-            return valid_functions
+            # Bypass strict Pydantic validation to flawlessly preserve nested schemas
+            return raw_data
 
         except json.JSONDecodeError as e:
             error(f"Failed to parse JSON schema: Syntax error at {e}")
@@ -44,3 +30,13 @@ class SchemaParser(BaseModel):
         except Exception as e:
             error(f"Unexpected I/O error reading schema: {e}")
             return []
+
+    @staticmethod
+    def is_nested(target_name: str, functions_schema: List[Dict[str, Any]]) -> bool:
+        for f_schema in functions_schema:
+            if f_schema.get("name") == target_name:
+                params = f_schema.get("parameters", {})
+                for key, attr in params.items():
+                    if attr.get("type") == "object":
+                        return True
+        return False
