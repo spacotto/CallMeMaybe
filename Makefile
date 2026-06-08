@@ -37,7 +37,7 @@ WHITE	:= \033[1;97m
 #  Additional commands
 # ------------------------------------------------------------
 
-ECHO	:= echo -e
+ECHO	:= echo
 FIND	:= /bin/find
 IGNORE	:= 2>/dev/null || true
 MV	:= /bin/mv
@@ -155,8 +155,8 @@ lint-strict:
 # ------------------------------------------------------------
 
 test:
-	@$(ECHO) "$(YELLOW)>>> Running pytest...$(RESET)"
-	$(PYTEST) -v -s tests/
+	@$(ECHO) "$(YELLOW)>>> Running Test Suite UI...$(RESET)"
+	@$(PYTHON) -m tests 
 
 # ------------------------------------------------------------
 #  campus-init — Set up environment in /tmp to bypass space constraints
