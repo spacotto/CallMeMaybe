@@ -2,7 +2,7 @@ import time
 import argparse
 import json
 import os
-from typing import List
+from typing import List, Dict, Any
 
 from src.engine import (
     FunctionClassifier,

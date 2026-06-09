@@ -6,9 +6,15 @@
     "prompt": "Find distance between point A (3, 8) and point B (24, 42)."
   },
   {
-    "prompt": "Register the following event: Silvia (30 years old) married Alex (28 years old)."
+    "prompt": "Add 3 cans of beans to the grocery list."
   },
   {
-    "prompt": "Register the following event: Qifrey (27 years old) married Olruggio (31 years old)."
+    "prompt": "Please put 5 red apples on my grocery list."
+  },
+  {
+    "prompt": "Remove 2 bags of chips from the grocery list."
+  },
+  {
+    "prompt": "Can you take away 3 bottles of milk from the list?"
   }
 ]
