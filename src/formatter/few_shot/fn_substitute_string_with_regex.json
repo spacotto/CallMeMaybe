@@ -14,13 +14,5 @@
       "regex": "[aeiouAEIOU]",
       "replacement": "*"
     }
-  },
-  {
-    "prompt": "Substitute the word 'cat' with 'dog' in 'The cat sat on the mat with another cat'",
-    "parameters": {
-      "source_string": "The cat sat on the mat with another cat",
-      "regex": "cat",
-      "replacement": "dog"
-    }
   }
 ]

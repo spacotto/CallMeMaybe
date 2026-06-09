@@ -4,17 +4,5 @@
     "parameters": {
       "name": "shrek"
     }
-  },
-  {
-    "prompt": "Greet john",
-    "parameters": {
-      "name": "john"
-    }
-  },
-  {
-    "prompt": "Say hello to Alice",
-    "parameters": {
-      "name": "Alice"
-    }
   }
 ]

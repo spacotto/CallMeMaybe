@@ -4,17 +4,5 @@
     "parameters": {
       "s": "hello"
     }
-  },
-  {
-    "prompt": "Reverse the string 'world'",
-    "parameters": {
-      "s": "world"
-    }
-  },
-  {
-    "prompt": "Can you reverse 'OpenAI'?",
-    "parameters": {
-      "s": "OpenAI"
-    }
   }
 ]

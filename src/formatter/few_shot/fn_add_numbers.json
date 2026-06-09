@@ -7,13 +7,6 @@
     }
   },
   {
-    "prompt": "What is the sum of 265 and 345?",
-    "parameters": {
-      "a": 265,
-      "b": 345
-    }
-  },
-  {
     "prompt": "Add -10 and 50 together.",
     "parameters": {
       "a": -10,
