@@ -257,7 +257,7 @@ class ParameterExtractor:
                     elif active_key == "replacement":
                         if "number" in prompt_lower:
                             target_str = "NUMBERS"
-                        elif "vowel" in prompt_lower:
+                        elif "asterisk" in prompt_lower:
                             target_str = "*"
                         elif "cat" in prompt_lower:
                             target_str = "dog"
