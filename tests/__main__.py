@@ -8,15 +8,17 @@ def run() -> None:
     print(' ' + '=' * 60)
 
     options = {
-        1: 'Visualise Tokenizer',
-        2: 'Test input validation'
+        1: ['Standard prompt batch'],
+        2: ['Input handling'],
+        3: ['Output validation'],
+        4: ['Edge cases']
         }
 
     print(clr.apply('bold', 'white', f'  {"n.":<3}Description'))
     print(' ' + '-' * 60)
 
     for k, v in options.items():
-        print(f'  {k:<3}{v}')
+        print(f'  {k:<3}{v[0]}')
 
     print(' ' + '-' * 60)
     choice = input(clr.apply('bold', 'white', f'  Pick an option: '))

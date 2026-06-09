@@ -3,6 +3,7 @@ data/output/
 moulinette/
 
 # Temps
+tree
 *.swp
 *.swo
 
