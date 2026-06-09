@@ -134,7 +134,7 @@ def main() -> None:
                 prompts=flat_prompts,
                 function_names=flat_names,
                 functions=functions_schema,
-                max_new_tokens=120,
+                max_new_tokens=42,
                 verbose=True
             )
 
@@ -145,7 +145,7 @@ def main() -> None:
                 prompts=nested_prompts,
                 function_names=nested_names,
                 functions=functions_schema,
-                max_new_tokens=180,
+                max_new_tokens=80,
                 verbose=True
             )
 
