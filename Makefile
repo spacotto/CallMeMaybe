@@ -19,6 +19,8 @@ FUNC_DEF := data/input/functions_definition.json
 INPUT_F	 := data/input/function_calling_tests.json
 OUTPUT_F := data/output/function_calls.json
 
+HF_OFF	:= HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
+
 # ------------------------------------------------------------
 #  Ansi colors
 # ------------------------------------------------------------
@@ -215,7 +217,7 @@ nested:
 
 private:
 	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
-	@$(PYTHON) -m src \
+	@$(HF_OFF) $(PYTHON) -m src \
 	--functions_definition moulinette/data/input/functions_definition.json \
 	--input moulinette/data/input/function_calling_tests.json \
 	--output data/output/function_calls_private.json 
@@ -226,7 +228,7 @@ private:
 
 public:
 	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
-	@$(PYTHON) -m src \
+	@$(HF_OFF) $(PYTHON) -m src \
 	--functions_definition data/input/functions_definition.json \
 	--input data/input/function_calling_tests.json \
 	--output data/output/function_calls_public.json 

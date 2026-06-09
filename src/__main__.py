@@ -34,7 +34,7 @@ def calculate_prompt_limit(func_name: str,
         # Give extra room for known complex functions
         if func_name in ["fn_execute_sql_query",
                          "fn_substitute_string_with_regex"]:
-            return 90
+            return 80
         return 60
 
     # If it's purely math/booleans, scale by the number of variables
