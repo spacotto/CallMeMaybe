@@ -1,8 +1,0 @@
-[
-  {
-    "prompt": "Reverse the string 'hello'",
-    "parameters": {
-      "s": "hello"
-    }
-  }
-]

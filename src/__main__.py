@@ -15,6 +15,37 @@ from src.utils import Formatter, error
 from src.visualizer import Visualizer
 
 
+def calculate_prompt_limit(func_name: str,
+                           functions_schema: List[Dict[str, Any]]) -> int:
+    """Calculates a safe token limit based on the target schema's types."""
+    schema = next(
+        (f for f in functions_schema if f["name"] == func_name), {}
+    )
+    params = schema.get("parameters", {})
+
+    # No parameters, just the name
+    if not params:
+        return 20
+
+    types = [v.get("type") for v in params.values() if isinstance(v, dict)]
+
+    # If the schema involves strings, it needs more room
+    if "string" in types:
+        # Give extra room for known complex functions
+        if func_name in ["fn_execute_sql_query",
+                         "fn_substitute_string_with_regex"]:
+            return 90
+        return 60
+
+    # If it's purely math/booleans, scale by the number of variables
+    num_params = len(params)
+    if num_params >= 3:
+        return 65
+
+    # Standard limit
+    return 42
+
+
 def main() -> None:
 
     start = time.time()
@@ -113,19 +144,23 @@ def main() -> None:
 
         generation_start = time.time()
 
-        # Step 1: Split the Batch
-        flat_prompts, flat_names, flat_indices = [], [], []
-        nested_prompts, nested_names, nested_indices = [], [], []
+        # Step 1: Split the Batch (Update this section)
+        flat_prompts, flat_names, flat_indices, flat_limits = [], [], [], []
+        nested_prompts, nested_names, nested_indices, nested_limits = [], [], [], []
 
         for idx, target_name in enumerate(target_names):
+            limit = calculate_prompt_limit(target_name, functions_schema)
+
             if SchemaParser.is_nested(target_name, functions_schema):
                 nested_prompts.append(prompts[idx])
                 nested_names.append(target_name)
                 nested_indices.append(idx)
+                nested_limits.append(limit + 50)
             else:
                 flat_prompts.append(prompts[idx])
                 flat_names.append(target_name)
                 flat_indices.append(idx)
+                flat_limits.append(limit)
 
         # Step 2: Process Fast Path (Flat Schemas)
         flat_results = []
@@ -134,7 +169,7 @@ def main() -> None:
                 prompts=flat_prompts,
                 function_names=flat_names,
                 functions=functions_schema,
-                max_new_tokens=42,
+                max_new_tokens_list=flat_limits,
                 verbose=True
             )
 
@@ -145,7 +180,7 @@ def main() -> None:
                 prompts=nested_prompts,
                 function_names=nested_names,
                 functions=functions_schema,
-                max_new_tokens=80,
+                max_new_tokens_list=nested_limits,
                 verbose=True
             )
 

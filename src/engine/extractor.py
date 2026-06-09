@@ -63,7 +63,7 @@ class ParameterExtractor:
         prompts: List[str],
         function_names: List[str],
         functions: List[Dict[str, Any]],
-        max_new_tokens: int = 120,
+        max_new_tokens_list: List[int], # <--- Changed to List
         verbose: bool = False
     ) -> List[str]:
 
@@ -103,11 +103,24 @@ class ParameterExtractor:
 
         is_finished = [False] * batch_size
 
-        for step in range(max_new_tokens):
+        # The absolute ceiling is the highest individual limit in the batch
+        absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 120
+
+        for step in range(absolute_max_steps):
             if all(is_finished):
                 break
 
+            # Check if any prompt has hit its personal limit and force it to finish
+            for i in range(batch_size):
+                if not is_finished[i] and step >= max_new_tokens_list[i]:
+                    is_finished[i] = True
+
             active_idx = [i for i, f in enumerate(is_finished) if not f]
+
+            # If dropping those prompts emptied the active queue,
+            # break immediately
+            if not active_idx:
+                break
 
             batch_logits = []
             for i in active_idx:
