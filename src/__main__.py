@@ -27,6 +27,17 @@ def calculate_prompt_limit(func_name: str,
     if not params:
         return 20
 
+    # DETECT NESTING: Are any of the parameter values dictionaries that
+    # don't directly contain a "type" key?
+    has_nesting = any(
+        isinstance(v, dict) and "type" not in v
+        for v in params.values()
+    )
+
+    # Nested JSON needs a massive token buffer for formatting
+    if has_nesting:
+        return 120
+
     types = [v.get("type") for v in params.values() if isinstance(v, dict)]
 
     # If the schema involves strings, it needs more room

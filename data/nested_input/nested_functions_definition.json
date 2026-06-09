@@ -1,40 +1,37 @@
 [
   {
     "name": "fn_calculate_distance",
+    "description": "Calculate the distance between point A (x, y) and point B (x, y).",
     "parameters": {
-      "coord_start": {
-        "type": "object",
-        "properties": { "x_val": { "type": "number" }, "y_val": { "type": "number" } }
+      "point_a": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
       },
-      "coord_end": {
-        "type": "object",
-        "properties": { "x_val": { "type": "number" }, "y_val": { "type": "number" } }
+      "point_b": {
+        "x": {
+          "type": "number"
+        },
+        "y": {
+          "type": "number"
+        }
       }
     }
   },
   {
-    "name": "fn_create_user_profile",
+    "name": "fn_register_marriage",
+    "description": "Register a marriage ceremony between spouse A (age) and spouse B (age).",
     "parameters": {
-      "identity": {
-        "type": "object",
-        "properties": { "username": { "type": "string" }, "age_years": { "type": "integer" } }
+      "spouse_a": {
+        "name": { "type": "string" },
+        "age": { "type": "integer" }
       },
-      "preferences": {
-        "type": "object",
-        "properties": { "email_address": { "type": "string" }, "ui_theme": { "type": "string" } }
-      }
-    }
-  },
-  {
-    "name": "fn_book_flight",
-    "parameters": {
-      "flight_route": {
-        "type": "object",
-        "properties": { "from_city": { "type": "string" }, "to_city": { "type": "string" } }
-      },
-      "travelers": {
-        "type": "object",
-        "properties": { "num_adults": { "type": "integer" }, "num_kids": { "type": "integer" } }
+      "spouse_b": {
+        "name": { "type": "string" },
+        "age": { "type": "integer" }
       }
     }
   }

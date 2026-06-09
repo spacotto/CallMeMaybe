@@ -1,20 +1,14 @@
 [
   {
-    "prompt": "Calculate distance. coord_start is x_val 0, y_val 0. coord_end is x_val 3, y_val 4."
+    "prompt": "Calculate distance between point A (0, 8) and point B (4, 2)."
   },
   {
-    "prompt": "Find distance. coord_start is x_val 10, y_val -5. coord_end is x_val 2, y_val 8."
+    "prompt": "Find distance between point A (3, 8) and point B (24, 42)."
   },
   {
-    "prompt": "Create profile. identity is username shrek, age_years 35. preferences is email_address swamp@mud.com, ui_theme dark."
+    "prompt": "Register the following event: Silvia (30 years old) married Alex (28 years old)."
   },
   {
-    "prompt": "Set up profile. identity is username john, age_years 28. preferences is email_address john@doe.org, ui_theme light."
-  },
-  {
-    "prompt": "Book flight. flight_route is from_city JFK, to_city LHR. travelers is num_adults 2, num_kids 1."
-  },
-  {
-    "prompt": "Book flight. flight_route is from_city CDG, to_city NRT. travelers is num_adults 1, num_kids 0."
+    "prompt": "Register the following event: Qifrey (27 years old) married Olruggio (31 years old)."
   }
 ]
