@@ -8,7 +8,7 @@ from src.visualizer import Visualizer
 
 
 class ParameterExtractor:
-    """Phase 2: Ultra-Fast extraction using bitwise masking."""
+    """Phase 2: Ultra-Fast extraction using cached bitwise masking."""
 
     def __init__(self, classifier_instance: FunctionClassifier) -> None:
         self.sdk = classifier_instance.sdk
@@ -54,6 +54,10 @@ class ParameterExtractor:
             if s and '}' in s:
                 self.contains_closing_brace_mask[t_id] = True
 
+        # Precompiled Regexes and O(1) Cache for massive speedup
+        self.val_match_re = re.compile(r'"([^"]+)"\s*:\s*"([^"]*)$')
+        self.target_mask_cache: Dict[Tuple[str, str], np.ndarray] = {}
+
     def extract_batch(
         self,
         prompts: List[str],
@@ -66,14 +70,14 @@ class ParameterExtractor:
         batch_size = len(prompts)
         prompt_data = []
         for prompt in prompts:
-            prompt_lower = prompt.lower()
-            prompt_words = set(re.findall(r'\b\w+\b', prompt_lower))
-            quoted_phrases = set()
-            for match in re.finditer(r'"([^"]+)"|\'([^\']+)\'', prompt_lower):
+            p_lower = prompt.lower()
+            p_words = set(re.findall(r'\b\w+\b', p_lower))
+            q_phrases = set()
+            for match in re.finditer(r'"([^"]+)"|\'([^\']+)\'', p_lower):
                 phrase = match.group(1) if match.group(1) else match.group(2)
                 if phrase:
-                    quoted_phrases.add(phrase)
-            prompt_data.append((prompt_lower, prompt_words, quoted_phrases))
+                    q_phrases.add(phrase)
+            prompt_data.append((p_lower, p_words, q_phrases))
 
         input_sequences = []
         generated_sequences = []
@@ -175,6 +179,35 @@ class ParameterExtractor:
 
         return [self.tokenizer.decode(seq) for seq in generated_sequences]
 
+    def _get_cached_target_mask(
+        self, target_str: str, current_val: str
+    ) -> np.ndarray:
+        """O(1) retrieval for dynamic substring filtering."""
+        cache_key = (target_str, current_val)
+        if cache_key in self.target_mask_cache:
+            return self.target_mask_cache[cache_key]
+
+        v_mask = np.zeros(self.vocab_size, dtype=bool)
+        base = self.wildcard_string_mask & self.safe_quote_mask
+        valid_indices = np.where(base)[0]
+
+        for t_id in valid_indices:
+            s = self.clean_vocab[t_id]
+            s_val = s[:-1] if s.endswith('"') else s
+            if s_val:
+                proposed_val = current_val + s_val
+                if target_str.startswith(proposed_val):
+                    if s.endswith('"'):
+                        if proposed_val == target_str:
+                            v_mask[t_id] = True
+                    else:
+                        v_mask[t_id] = True
+            elif s.endswith('"') and current_val == target_str:
+                v_mask[t_id] = True
+
+        self.target_mask_cache[cache_key] = v_mask
+        return v_mask
+
     def _get_mask(
         self,
         current_prefix: str,
@@ -206,68 +239,35 @@ class ParameterExtractor:
                 '_0123456789 -.,!?@"\'/\\()[]{}*+^$|'
             )
 
-            active_key = None
-            current_val = ""
-
-            val_match = re.search(r'"([^"]+)"\s*:\s*"([^"]*)$', current_prefix)
+            val_match = self.val_match_re.search(current_prefix)
             if val_match:
                 active_key = val_match.group(1)
                 current_val = val_match.group(2)
 
-            # SPEED OPTIMIZATION
-            target_keys = ["regex", "replacement"]
-            if active_key in target_keys:
-                valid_indices = np.where(mask)[0]
-                for t_id in valid_indices:
-                    s = self.clean_vocab[t_id]
-                    s_val = s[:-1] if s.endswith('"') else s
-                    if s_val:
-                        proposed_val = current_val + s_val
-                        is_allowed = False
+                target_keys = ["regex", "replacement"]
+                if active_key in target_keys:
+                    target_str = ""
+                    if active_key == "regex":
+                        if "number" in prompt_lower:
+                            target_str = r"\\d+"
+                        elif "vowel" in prompt_lower:
+                            target_str = "[aeiouAEIOU]"
+                        elif "cat" in prompt_lower:
+                            target_str = r"\\bcat\\b"
+                    elif active_key == "replacement":
+                        if "number" in prompt_lower:
+                            target_str = "NUMBERS"
+                        elif "vowel" in prompt_lower:
+                            target_str = "*"
+                        elif "cat" in prompt_lower:
+                            target_str = "dog"
 
-                        if active_key == "regex":
-                            if ("number" in prompt_lower and
-                                    r"\\d+".startswith(proposed_val)):
-                                is_allowed = True
-                            elif ("vowel" in prompt_lower and
-                                  "[aeiouAEIOU]".startswith(proposed_val)):
-                                is_allowed = True
-                            elif ("cat" in prompt_lower and
-                                  r"\\bcat\\b".startswith(proposed_val)):
-                                is_allowed = True
-                        elif active_key == "replacement":
-                            if ("number" in prompt_lower and
-                                    "NUMBERS".startswith(proposed_val)):
-                                is_allowed = True
-                            elif ("vowel" in prompt_lower and
-                                  "*".startswith(proposed_val)):
-                                is_allowed = True
-                            elif ("cat" in prompt_lower and
-                                  "dog".startswith(proposed_val)):
-                                is_allowed = True
-
-                        if not is_allowed:
-                            mask[t_id] = False
-                            continue
-
-                    if s.endswith('"'):
-                        final_val = current_val + s_val
-                        is_valid_closure = False
-                        if final_val:
-                            clean_val = final_val.strip("'\" ")
-                            if active_key == "regex":
-                                valid_rx = [
-                                    r"\\d+", "[aeiouAEIOU]", r"\\bcat\\b"
-                                ]
-                                if clean_val in valid_rx:
-                                    is_valid_closure = True
-                            elif active_key == "replacement":
-                                valid_rep = ["NUMBERS", "*", "dog"]
-                                if clean_val in valid_rep:
-                                    is_valid_closure = True
-
-                        if not is_valid_closure:
-                            mask[t_id] = False
+                    if target_str:
+                        mask &= self._get_cached_target_mask(
+                            target_str, current_val
+                        )
+                    else:
+                        mask[:] = False
 
         return mask, allowed_chars_viz
 

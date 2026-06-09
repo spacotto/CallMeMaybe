@@ -59,11 +59,11 @@ def main() -> None:
         fast_extractor = ParameterExtractor(classifier_instance=classifier)
         slow_extractor = NestedExtractor(classifier_instance=classifier)
 
-        elapsed = time.time() - start_time
+        init = time.time() - start_time
         print(Formatter.apply(
             'bold',
             'cyan',
-            f">>> Engine loaded in {elapsed:.2f} seconds.\n\n"
+            f">>> Engine loaded in {init:.2f} seconds.\n\n"
         ))
 
     except Exception as e:
@@ -215,11 +215,11 @@ def main() -> None:
         msg = f"\n\n 💾 All results saved to {args.output}"
         print(Formatter.apply('bold', 'cyan', msg))
 
-        final_time = time.time() - start
-        if final_time < 60:
-            stopwatch = f' ⏳ Pipeline completed in {final_time:.1f}s\n'
+        end = time.time() - start_time
+        if end < 60:
+            stopwatch = f' ⏳ Pipeline completed in {end:.1f}s\n'
         else:
-            stopwatch = f' ⏳ Pipeline completed in {final_time/60:.1f}m\n'
+            stopwatch = f' ⏳ Pipeline completed in {end/60:.1f}m\n'
         print(Formatter.apply('bold', 'lime', stopwatch))
 
     except Exception as e:
