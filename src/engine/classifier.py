@@ -37,7 +37,7 @@ class FunctionClassifier:
         self,
         prompts: List[str],
         functions: List[Dict[str, Any]],
-        max_new_tokens: int = 30
+        max_new_tokens: int = 10
     ) -> List[str]:
         batch_size = len(prompts)
         valid_names = [f["name"] for f in functions]
