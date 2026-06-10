@@ -1,3 +1,4 @@
+import subprocess
 from src.utils import Formatter as clr
 from src.utils import error as err
 
@@ -25,10 +26,32 @@ def run() -> None:
     print()
 
     try:
+        choice_num = int(choice.strip())
         print()
 
-    except Exception:
-        err(' Invalid option.\n')
+        if choice_num == 1:
+            print(clr.apply('bold', 'yellow', '>>> Launching Standard prompt batch...\n'))
+
+            command = [
+                "uv", "run", "python", "-m", "src",
+                "--functions_definition", "data/input/functions_definition.json",
+                "--input", "data/input/function_calling_tests.json",
+                "--output", "data/output/function_calls.json"
+            ]
+
+            subprocess.run(command, check=True)
+
+        elif choice_num in options:
+             print(clr.apply('bold', 'yellow', f' Option {choice_num} is not yet implemented.'))
+        else:
+             err(' Invalid option.\n')
+
+    except ValueError:
+        err(' Please enter a valid number.\n')
+    except subprocess.CalledProcessError as e:
+        err(f' The pipeline crashed or returned an error code: {e}\n')
+    except Exception as e:
+        err(f' An unexpected error occurred: {e}\n')
 
 
 if __name__ == "__main__":
