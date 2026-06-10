@@ -174,7 +174,7 @@ class NestedExtractor:
         prompts: List[str],
         function_names: List[str],
         functions: List[Dict[str, Any]],
-        max_new_tokens: int = 180,
+        max_new_tokens_list: List[int],
         verbose: bool = False
     ) -> List[str]:
         input_sequences = []
@@ -198,10 +198,21 @@ class NestedExtractor:
 
         is_finished = [False] * len(prompts)
 
-        for step in range(max_new_tokens):
+        # 🔄 Calculate the absolute maximum iteration boundary from your custom list
+        absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 180
+
+        for step in range(absolute_max_steps):
             if all(is_finished):
                 break
+
+            # 🔄 Force-finish individual prompts if they cross their personal limit
+            for i in range(len(prompts)):
+                if not is_finished[i] and step >= max_new_tokens_list[i]:
+                    is_finished[i] = True
+
             active_idx = [i for i, f in enumerate(is_finished) if not f]
+            if not active_idx:
+                break
 
             batch_logits = []
             for i in active_idx:

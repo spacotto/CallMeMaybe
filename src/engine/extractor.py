@@ -90,6 +90,7 @@ class ParameterExtractor:
                 functions=functions,
                 examples=targeted_examples
             )
+
             input_sequences.append(self.tokenizer.encode(primed_prompt))
 
             escaped_prompt = json.dumps(prompt)[1:-1]
@@ -251,36 +252,6 @@ class ParameterExtractor:
                 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'
                 '_0123456789 -.,!?@"\'/\\()[]{}*+^$|'
             )
-
-            val_match = self.val_match_re.search(current_prefix)
-            if val_match:
-                active_key = val_match.group(1)
-                current_val = val_match.group(2)
-
-                target_keys = ["regex", "replacement"]
-                if active_key in target_keys:
-                    target_str = ""
-                    if active_key == "regex":
-                        if "number" in prompt_lower:
-                            target_str = r"\\d+"
-                        elif "vowel" in prompt_lower:
-                            target_str = "[aeiouAEIOU]"
-                        elif "cat" in prompt_lower:
-                            target_str = r"\\bcat\\b"
-                    elif active_key == "replacement":
-                        if "number" in prompt_lower:
-                            target_str = "NUMBERS"
-                        elif "asterisk" in prompt_lower:
-                            target_str = "*"
-                        elif "cat" in prompt_lower:
-                            target_str = "dog"
-
-                    if target_str:
-                        mask &= self._get_cached_target_mask(
-                            target_str, current_val
-                        )
-                    else:
-                        mask[:] = False
 
         return mask, allowed_chars_viz
 

@@ -14,8 +14,6 @@ class Formatter:
         self, format_type: ModelFormat = ModelFormat.CHATML
     ) -> None:
         self.format_type = format_type
-        # Dynamically map the path to the 'few_shot' folder located in the
-        # same directory as this file
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.examples_dir = os.path.join(current_dir, "few_shot")
 
@@ -31,37 +29,12 @@ class Formatter:
                       f"{func_name}: {e}")
         return []
 
-    def _format_examples_string(
-        self, target_name: str, examples: List[Dict[str, Any]]
-    ) -> str:
-        """Compiles targeted JSON examples into a strict string layout."""
-        if not examples:
-            return ""
-
-        formatted = "--- EXAMPLES ---\n"
-        for ex in examples:
-            formatted += f"User: {ex.get('prompt', '')}\n"
-
-            # Construct the expected full JSON output so the LLM sees
-            # the exact structure
-            expected_output = {
-                "name": target_name,
-                "parameters": ex.get('parameters', {})
-            }
-            out_str = json.dumps(expected_output, indent=2)
-
-            formatted += f"Output:\n{out_str}\n\n"
-        formatted += "----------------\n\n"
-        return formatted
-
     def build_classification_prompt(
         self, user_prompt: str, functions: List[Dict[str, Any]]
     ) -> str:
         """PASS 1: Zero-Shot prompt to force the LLM to identify the
         function name.
         """
-        # For classification, we only need the names and descriptions
-        # to save context window space
         schema_summary = [
             {
                 "name": f["name"],
@@ -83,7 +56,18 @@ class Formatter:
             "Generate ONLY the raw JSON object."
         )
 
-        return self._route_template(system_instruction, user_prompt)
+        # Classification keeps a simple system/user structure
+        if self.format_type == ModelFormat.CHATML:
+            return (
+                f"<|im_start|>system\n{system_instruction}<|im_end|>\n"
+                f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
+                f"<|im_start|>assistant\n"
+            )
+        else:
+            return (
+                f"[INST] <<SYS>>\n{system_instruction}\n<</SYS>>\n\n"
+                f"{user_prompt} [/INST]"
+            )
 
     def build_extraction_prompt(
         self,
@@ -92,18 +76,15 @@ class Formatter:
         functions: List[Dict[str, Any]],
         examples: List[Dict[str, Any]]
     ) -> str:
-        """PASS 2: Few-Shot prompt to force the LLM to extract complex
-        nested parameters.
+        """PASS 2: Few-Shot prompt utilizing native message boundaries
+        to ground the model and safely extract parameters.
         """
-        # Find the specific schema for the target function
         target_schema = next(
             (f for f in functions if f["name"] == target_name), {}
         )
         schema_str = json.dumps(target_schema, indent=2)
 
-        # Build the exact few-shot strings based on the loaded JSON file
-        examples_str = self._format_examples_string(target_name, examples)
-
+        # 🛠️ FIX 1: Hardcoded text heuristics stripped out completely.
         system_instruction = (
             "You are a precise data extraction engine.\n"
             f"The user's request maps to the function: '{target_name}'.\n"
@@ -111,45 +92,73 @@ class Formatter:
             "the schema below.\n"
             "You MUST respond with a single JSON object containing "
             "the keys 'name' and 'parameters'.\n\n"
-            "CRITICAL RULES FOR REGEX REPLACEMENT:\n"
-            r"- If replacing numbers, the 'regex' parameter MUST be "
-            r"'\\d+'." + "\n"
-            r"- If replacing vowels, the 'regex' parameter MUST be "
-            r"'[aeiouAEIOU]'." + "\n"
-            r"- If replacing exact words (like 'cat'), the 'regex' "
-            r"parameter MUST be '\\bcat\\b'." + "\n\n"
             f"FUNCTION SCHEMA:\n{schema_str}\n\n"
-            f"{examples_str}"
             "Do NOT include any conversational text. "
             "Generate ONLY the raw JSON object."
         )
 
-        return self._route_template(system_instruction, user_prompt)
-
-    def _route_template(
-        self, system_instruction: str, user_prompt: str
-    ) -> str:
-        """Applies the correct model template wrapper."""
+        # 🛠️ FIX 2: Structure examples as real native message cycles
         if self.format_type == ModelFormat.CHATML:
-            return self._build_chatml(system_instruction, user_prompt)
+            return self._build_chatml_extraction(
+                system_instruction, user_prompt, target_name, examples
+            )
         elif self.format_type == ModelFormat.INSTRUCT:
-            return self._build_instruct(system_instruction, user_prompt)
+            return self._build_instruct_extraction(
+                system_instruction, user_prompt, target_name, examples
+            )
         else:
             raise ValueError(
                 f"Unsupported template format: {self.format_type}"
             )
 
-    def _build_chatml(self, system_instruction: str, user_prompt: str) -> str:
-        return (
-            f"<|im_start|>system\n{system_instruction}<|im_end|>\n"
-            f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
-            f"<|im_start|>assistant\n"
-        )
-
-    def _build_instruct(
-        self, system_instruction: str, user_prompt: str
+    def _build_chatml_extraction(
+        self, system_instruction: str, user_prompt: str,
+        target_name: str, examples: List[Dict[str, Any]]
     ) -> str:
-        return (
-            f"[INST] <<SYS>>\n{system_instruction}\n<</SYS>>\n\n"
-            f"{user_prompt} [/INST]"
-        )
+        """Assembles a ChatML prompt stream with explicit dialogue turns."""
+        prompt = f"<|im_start|>system\n{system_instruction}<|im_end|>\n"
+
+        for ex in examples:
+            prompt += f"<|im_start|>user\n{ex.get('prompt', '')}<|im_end|>\n"
+            expected_output = {
+                "name": target_name,
+                "parameters": ex.get('parameters', {})
+            }
+            out_str = json.dumps(expected_output)
+            prompt += f"<|im_start|>assistant\n{out_str}<|im_end|>\n"
+
+        prompt += f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
+        prompt += f"<|im_start|>assistant\n"
+        return prompt
+
+    def _build_instruct_extraction(
+        self, system_instruction: str, user_prompt: str,
+        target_name: str, examples: List[Dict[str, Any]]
+    ) -> str:
+        """Assembles an Instruct prompt stream with explicit turn switches."""
+        prompt = f"[INST] <<SYS>>\n{system_instruction}\n<</SYS>>\n\n"
+
+        if examples:
+            # First example closes the initial system context tag block
+            ex = examples[0]
+            prompt += f"{ex.get('prompt', '')} [/INST] "
+            expected_output = {
+                "name": target_name,
+                "parameters": ex.get('parameters', {})
+            }
+            prompt += f"{json.dumps(expected_output)} </s>"
+
+            # Chain subsequent sample inputs cleanly
+            for ex in examples[1:]:
+                prompt += f" <s>[INST] {ex.get('prompt', '')} [/INST] "
+                expected_output = {
+                    "name": target_name,
+                    "parameters": ex.get('parameters', {})
+                }
+                prompt += f"{json.dumps(expected_output)} </s>"
+
+            prompt += f" <s>[INST] {user_prompt} [/INST]"
+        else:
+            prompt += f"{user_prompt} [/INST]"
+
+        return prompt
