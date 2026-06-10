@@ -11,7 +11,8 @@ from src.engine import (
     PostProcessor
 )
 from src.parser import SchemaParser
-from src.utils import Formatter, error
+from src.utils import Formatter as fmt
+from src.utils import error
 from src.visualizer import Visualizer
 
 
@@ -23,18 +24,14 @@ def calculate_prompt_limit(func_name: str,
     )
     params = schema.get("parameters", {})
 
-    # No parameters, just the name
     if not params:
         return 20
 
-    # DETECT NESTING: Are any of the parameter values dictionaries that
-    # don't directly contain a "type" key?
     has_nesting = any(
-        isinstance(v, dict) and "type" not in v
+        isinstance(v, dict) and v.get("type") == "object"
         for v in params.values()
     )
 
-    # Nested JSON needs a massive token buffer for formatting
     if has_nesting:
         return 120
 
@@ -79,7 +76,7 @@ def main() -> None:
         cli_parser.add_argument(
             "--output",
             type=str,
-            default="data/output/function_calls.json"
+            default="data/output/function_calling_results.json"
         )
         cli_parser.add_argument("--verbose", action="store_true")
         args = cli_parser.parse_args()
@@ -88,7 +85,7 @@ def main() -> None:
         error(f"CLI Initialization failed: {e}")
         return
 
-    print(Formatter.apply(
+    print(fmt.apply(
         'bold', 'yellow', ">>> Initializing Three-Stage Pipeline..."
     ))
     start_time = time.time()
@@ -102,7 +99,7 @@ def main() -> None:
         slow_extractor = NestedExtractor(classifier_instance=classifier)
 
         init = time.time() - start_time
-        print(Formatter.apply(
+        print(fmt.apply(
             'bold',
             'cyan',
             f">>> Engine loaded in {init:.2f} seconds.\n\n"
@@ -131,9 +128,9 @@ def main() -> None:
             if isinstance(item, dict) and "prompt" in item
         ]
 
-        print(Formatter.apply(None, 'gray', "-" * 70))
+        print(fmt.apply(None, 'gray', "-" * 70))
         msg = f">>> Phase 1: Classifying {len(prompts)} prompts..."
-        print(Formatter.apply('bold', 'yellow', msg))
+        print(fmt.apply('bold', 'yellow', msg))
 
         target_names: List[str] = classifier.classify_batch(
             prompts, functions_schema
@@ -145,13 +142,13 @@ def main() -> None:
 
     # --- PHASE 2: PARAMETER EXTRACTION (ROUTED) ---
     try:
-        print(Formatter.apply(None, 'gray', "-" * 70))
-        print(Formatter.apply(
+        print(fmt.apply(None, 'gray', "-" * 70))
+        print(fmt.apply(
                 'bold',
                 'yellow',
                 ">>> Phase 2: Extracting parameters (Routed)..."
             ))
-        print(Formatter.apply(None, 'gray', "-" * 70))
+        print(fmt.apply(None, 'gray', "-" * 70))
 
         generation_start = time.time()
 
@@ -211,8 +208,8 @@ def main() -> None:
     # --- PHASE 3: POST-PROCESSING ---
     results = []
     try:
-        print(Formatter.apply('bold', 'yellow', ">>> Phase 3: Validating..."))
-        print(Formatter.apply(None, 'gray', "-" * 70))
+        print(fmt.apply('bold', 'yellow', ">>> Phase 3: Validating..."))
+        print(fmt.apply(None, 'gray', "-" * 70))
 
         for idx, (prompt, target_name, json_result_str) in enumerate(
             zip(prompts, target_names, json_results)
@@ -259,14 +256,14 @@ def main() -> None:
             json.dump(results, output_file, indent=4)
 
         msg = f"\n\n 💾 All results saved to {args.output}"
-        print(Formatter.apply('bold', 'cyan', msg))
+        print(fmt.apply('bold', 'cyan', msg))
 
         end = time.time() - start_time
         if end < 60:
             stopwatch = f' ⏳ Pipeline completed in {end:.1f}s\n'
         else:
             stopwatch = f' ⏳ Pipeline completed in {end/60:.1f}m\n'
-        print(Formatter.apply('bold', 'lime', stopwatch))
+        print(fmt.apply('bold', 'lime', stopwatch))
 
     except Exception as e:
         error(f"Failed to save results: {e}")

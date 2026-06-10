@@ -4,19 +4,25 @@
     "description": "Calculate the distance between point A (x, y) and point B (x, y).",
     "parameters": {
       "point_a": {
-        "x": {
-          "type": "number"
-        },
-        "y": {
-          "type": "number"
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
         }
       },
       "point_b": {
-        "x": {
-          "type": "number"
-        },
-        "y": {
-          "type": "number"
+        "type": "object",
+        "properties": {
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          }
         }
       }
     }
@@ -26,11 +32,14 @@
     "description": "Add a specific item with its quantity to the grocery list.",
     "parameters": {
       "item_details": {
-        "name": {
-          "type": "string"
-        },
-        "quantity": {
-          "type": "number"
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          }
         }
       }
     }
@@ -40,11 +49,14 @@
     "description": "Remove a specific quantity of an item from the grocery list.",
     "parameters": {
       "item_details": {
-        "name": {
-          "type": "string"
-        },
-        "quantity": {
-          "type": "number"
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "number"
+          }
         }
       }
     }
