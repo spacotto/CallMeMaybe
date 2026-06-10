@@ -1,6 +1,6 @@
 [
   {
-    "prompt": "Replace all numbers in \"Hello 34 I'm 233 years old\" with NUMBERS",
+    "prompt": "Change the digits inside the text \"Hello 34 I'm 233 years old\" so they say NUMBERS.",
     "parameters": {
       "source_string": "Hello 34 I'm 233 years old",
       "regex": "\\d+",
@@ -8,11 +8,19 @@
     }
   },
   {
-    "prompt": "Replace all vowels in 'Programming is fun' with asterisks",
+    "prompt": "Take the phrase 'Programming is fun' and swap out every vowel for an *.",
     "parameters": {
       "source_string": "Programming is fun",
       "regex": "[aeiouAEIOU]",
       "replacement": "*"
+    }
+  },
+  {
+    "prompt": "In the text 'The cat sat on the mat with another cat', switch the word 'cat' to 'dog'.",
+    "parameters": {
+      "source_string": "The cat sat on the mat with another cat",
+      "regex": "\\bcat\\b",
+      "replacement": "dog"
     }
   }
 ]

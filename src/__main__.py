@@ -6,8 +6,7 @@ from typing import List, Dict, Any
 
 from src.engine import (
     FunctionClassifier,
-    ParameterExtractor,
-    NestedExtractor,
+    SchemaExtractor,
     PostProcessor
 )
 from src.parser import SchemaParser
@@ -37,20 +36,16 @@ def calculate_prompt_limit(func_name: str,
 
     types = [v.get("type") for v in params.values() if isinstance(v, dict)]
 
-    # If the schema involves strings, it needs more room
     if "string" in types:
-        # Give extra room for known complex functions
         if func_name in ["fn_execute_sql_query",
                          "fn_substitute_string_with_regex"]:
             return 80
         return 60
 
-    # If it's purely math/booleans, scale by the number of variables
     num_params = len(params)
     if num_params >= 3:
         return 65
 
-    # Standard limit
     return 42
 
 
@@ -86,17 +81,14 @@ def main() -> None:
         return
 
     print(fmt.apply(
-        'bold', 'yellow', ">>> Initializing Three-Stage Pipeline..."
+        'bold', 'yellow', ">>> Initializing Pipeline..."
     ))
     start_time = time.time()
 
     # --- MODEL INITIALIZATION ---
     try:
         classifier = FunctionClassifier(model_name="Qwen/Qwen3-0.6B")
-
-        # Instantiate BOTH extraction paths
-        fast_extractor = ParameterExtractor(classifier_instance=classifier)
-        slow_extractor = NestedExtractor(classifier_instance=classifier)
+        schema_extractor = SchemaExtractor(classifier_instance=classifier)
 
         init = time.time() - start_time
         print(fmt.apply(
@@ -140,64 +132,32 @@ def main() -> None:
         error(f"Phase 1 (Classification) failed: {e}")
         return
 
-    # --- PHASE 2: PARAMETER EXTRACTION (ROUTED) ---
+    # --- PHASE 2: UNIFIED PARAMETER EXTRACTION ---
     try:
         print(fmt.apply(None, 'gray', "-" * 70))
         print(fmt.apply(
                 'bold',
                 'yellow',
-                ">>> Phase 2: Extracting parameters (Routed)..."
+                ">>> Phase 2: Extracting parameters via Schema Engine..."
             ))
         print(fmt.apply(None, 'gray', "-" * 70))
 
         generation_start = time.time()
 
-        # Step 1: Split the Batch (Update this section)
-        flat_prompts, flat_names, flat_indices, flat_limits = [], [], [], []
-        nested_prompts, nested_names, nested_indices, nested_limits = [], [], [], []
-
-        for idx, target_name in enumerate(target_names):
+        limits = []
+        for target_name in target_names:
             limit = calculate_prompt_limit(target_name, functions_schema)
-
             if SchemaParser.is_nested(target_name, functions_schema):
-                nested_prompts.append(prompts[idx])
-                nested_names.append(target_name)
-                nested_indices.append(idx)
-                nested_limits.append(limit + 50)
+                limits.append(limit + 50)
             else:
-                flat_prompts.append(prompts[idx])
-                flat_names.append(target_name)
-                flat_indices.append(idx)
-                flat_limits.append(limit)
+                limits.append(limit)
 
-        # Step 2: Process Fast Path (Flat Schemas)
-        flat_results = []
-        if flat_prompts:
-            flat_results = fast_extractor.extract_batch(
-                prompts=flat_prompts,
-                function_names=flat_names,
-                functions=functions_schema,
-                max_new_tokens_list=flat_limits,
-                verbose=True
-            )
-
-        # Step 3: Process Slow Path (Nested Schemas)
-        nested_results = []
-        if nested_prompts:
-            nested_results = slow_extractor.extract_batch(
-                prompts=nested_prompts,
-                function_names=nested_names,
-                functions=functions_schema,
-                max_new_tokens_list=nested_limits,
-                verbose=True
-            )
-
-        # Step 4: Reconstruct Original Batch Order
-        json_results = [""] * len(prompts)
-        for original_idx, result in zip(flat_indices, flat_results):
-            json_results[original_idx] = result
-        for original_idx, result in zip(nested_indices, nested_results):
-            json_results[original_idx] = result
+        json_results = schema_extractor.extract_batch(
+            prompts=prompts,
+            function_names=target_names,
+            functions=functions_schema,
+            max_new_tokens_list=limits,
+        )
 
         avg_gen_time = (time.time() - generation_start) / max(1, len(prompts))
 

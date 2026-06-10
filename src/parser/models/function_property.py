@@ -1,5 +1,5 @@
-from typing import Optional, List, Any
-from pydantic import BaseModel
+from typing import Optional, List, Any, Dict
+from pydantic import BaseModel, Field
 
 
 class FunctionProperty(BaseModel):
@@ -9,3 +9,8 @@ class FunctionProperty(BaseModel):
     type: Optional[str] = "string"
     description: Optional[str] = None
     enum: Optional[List[Any]] = None
+
+    properties: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Nested properties dictionary if the type is designated as an object."
+    )

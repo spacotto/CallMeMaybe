@@ -1,10 +1,11 @@
 import json
 from typing import List, Dict, Any
-
+from pydantic import ValidationError
+from src.parser.models.function_call_result import FunctionCallResult
 
 class PostProcessor:
     """Phase 3: Validates JSON structure, perfectly aligns parameters,
-    and enforces Schema types.
+    and enforces Schema types using strict Pydantic rules.
     """
 
     @staticmethod
@@ -14,8 +15,8 @@ class PostProcessor:
         json_result_str: str,
         functions_schema: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Parses the raw JSON string and mathematically casts variables
-        based on the target schema.
+        """Parses the raw JSON string, casts variables, and enforces
+        the mandatory output schema via Pydantic.
         """
         try:
             call_data = json.loads(json_result_str)
@@ -39,7 +40,6 @@ class PostProcessor:
 
             aligned_params: Dict[str, Any] = {}
             raw_values = list(raw_params.values())
-            prompt_lower = prompt.lower()
 
             for i, expected_key in enumerate(expected_keys):
                 val: Any = ""
@@ -50,65 +50,6 @@ class PostProcessor:
 
                 if isinstance(val, str):
                     val = val.strip()
-
-                # Zero-Latency Fallbacks
-
-                if expected_key == 'name' and 'shrek' in prompt_lower:
-                    aligned_params[expected_key] = 'shrek'
-                    continue
-
-                if expected_key == 'regex':
-                    if 'vowel' in prompt_lower:
-                        aligned_params[expected_key] = '[aeiouAEIOU]'
-                        continue
-                    elif 'number' in prompt_lower:
-                        aligned_params[expected_key] = r'\d+'
-                        continue
-                    elif 'cat' in prompt_lower:
-                        aligned_params[expected_key] = r'\bcat\b'
-                        continue
-
-                if expected_key == 'replacement':
-                    if 'asterisk' in prompt_lower:
-                        aligned_params[expected_key] = '*'
-                        continue
-                    elif 'number' in prompt_lower:
-                        aligned_params[expected_key] = 'NUMBERS'
-                        continue
-                    elif 'cat' in prompt_lower:
-                        aligned_params[expected_key] = 'dog'
-                        continue
-
-                if expected_key == 'database':
-                    if 'system database' in prompt_lower:
-                        aligned_params[expected_key] = 'system'
-                        continue
-                    elif 'production database' in prompt_lower:
-                        aligned_params[expected_key] = 'production'
-                        continue
-
-                if expected_key == 'path':
-                    if 'data.json' in prompt_lower:
-                        aligned_params[expected_key] = '/home/user/data.json'
-                        continue
-                    elif 'config.ini' in prompt_lower:
-                        # Raw python string (r'') guarantees exactly one
-                        # backslash in memory
-                        aligned_params[expected_key] = (
-                            r'C:\Users\john\config.ini'
-                        )
-                        continue
-
-                # Template Escaping Handling
-                if expected_key == 'template':
-                    if 'hello {user}\'s profile' in prompt_lower:
-                        aligned_params[expected_key] = (
-                            "Hello {user}'s profile!"
-                        )
-                        continue
-                    elif 'say "hello" to {name}' in prompt_lower:
-                        aligned_params[expected_key] = 'Say "hello" to {name}'
-                        continue
 
                 # SCHEMA-AWARE TYPE CASTING
                 expected_type = param_types.get(expected_key)
@@ -130,15 +71,18 @@ class PostProcessor:
                 else:
                     aligned_params[expected_key] = val
 
-            return {
-                "prompt": prompt,
-                "name": func_name,
-                "parameters": aligned_params
-            }
+            # 🛡️ PYDANTIC VALIDATION INTEGRATION
+            validated_output = FunctionCallResult(
+                prompt=prompt,
+                name=func_name,
+                parameters=aligned_params
+            )
 
-        except json.JSONDecodeError:
+            return validated_output.model_dump()
+
+        except (json.JSONDecodeError, ValidationError) as e:
             return {
                 "prompt": prompt,
-                "error": "Invalid JSON generated",
+                "error": f"Validation/Parsing Error: {e}",
                 "raw": json_result_str
             }

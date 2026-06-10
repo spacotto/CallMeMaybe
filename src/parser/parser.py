@@ -25,7 +25,7 @@ class SchemaParser(BaseModel):
                 error("Invalid schema format: Root element must be a list.")
                 return []
 
-            # Bypass strict Pydantic validation to flawlessly preserve
+            # Bypass strict Pydantic validation to preserve
             # nested schemas
             return raw_data
 
@@ -44,6 +44,6 @@ class SchemaParser(BaseModel):
             if f_schema.get("name") == target_name:
                 params = f_schema.get("parameters", {})
                 for key, attr in params.items():
-                    if attr.get("type") == "object":
+                    if isinstance(attr, dict) and attr.get("type") == "object":
                         return True
         return False

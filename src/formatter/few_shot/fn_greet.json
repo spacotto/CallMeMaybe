@@ -1,8 +1,26 @@
 [
   {
-    "prompt": "Greet shrek",
+    "prompt": "I would like you to greet shrek.",
     "parameters": {
       "name": "shrek"
+    }
+  },
+  {
+    "prompt": "Say hello to shrek for me",
+    "parameters": {
+      "name": "shrek"
+    }
+  },
+  {
+    "prompt": "Send a greeting to shrek please",
+    "parameters": {
+      "name": "shrek"
+    }
+  },
+  {
+    "prompt": "Greet john",
+    "parameters": {
+      "name": "john"
     }
   }
 ]
