@@ -64,6 +64,12 @@ class SchemaExtractor:
             if all(c in ' \n\r\ttrufalse' for c in s):
                 self.type_masks["boolean"][t_id] = True
 
+        # Optimization: Precompute static indices to eliminate O(V) np.where scans
+        self.struct_mask_indices = np.where(self.struct_mask)[0]
+
+        base_wildcard = self.wildcard_string_mask & self.safe_quote_mask
+        self.wildcard_safe_indices = np.where(base_wildcard)[0]
+
         self.key_mask_cache: Dict[str, np.ndarray] = {}
 
     def _build_schema_maps(
@@ -293,8 +299,8 @@ class SchemaExtractor:
             completed: Set[str] = stack[-1]["completed"] if stack else set()
             valid = [k for k in key_map.get(parent_key, []) if k not in completed]
 
-            for t_id in np.where(self.struct_mask)[0]:
-                # Optimization: Using the precomputed stripped list
+            # Optimization: Use precomputed static indices
+            for t_id in self.struct_mask_indices:
                 s_strip = self.stripped_vocab[t_id]
 
                 if state == "EXPECT_KEY":
@@ -360,8 +366,9 @@ class SchemaExtractor:
                     cache_k = f"{','.join(sorted(valid))}|{prefix}"
                     if cache_k not in self.key_mask_cache:
                         v_mask = np.zeros(self.vocab_size, dtype=bool)
-                        base = self.wildcard_string_mask & self.safe_quote_mask
-                        for t_id in np.where(base)[0]:
+
+                        # Optimization: Use precomputed indices directly
+                        for t_id in self.wildcard_safe_indices:
                             s = self.clean_vocab[t_id]
                             if s:
                                 s_val = s[:-1] if s.endswith('"') else s
