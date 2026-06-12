@@ -25,8 +25,16 @@ class FunctionClassifier:
         self.vocab_size = max_id + 1
         self.clean_vocab = [""] * self.vocab_size
 
+        # Optimization: Inverted index for O(1) ID lookups
+        self.string_to_ids: Dict[str, List[int]] = {}
+
         for t_id, t_str in self.tokenizer.id_to_token.items():
-            self.clean_vocab[t_id] = t_str.replace("Ġ", " ")
+            clean_str = t_str.replace("Ġ", " ")
+            self.clean_vocab[t_id] = clean_str
+
+            if clean_str not in self.string_to_ids:
+                self.string_to_ids[clean_str] = []
+            self.string_to_ids[clean_str].append(t_id)
 
         # O(1) Lazy Cache for bitwise masks
         self.prefix_mask_cache: Dict[str, np.ndarray] = {}
@@ -88,11 +96,21 @@ class FunctionClassifier:
                 if prefix not in self.prefix_mask_cache:
                     v_mask = np.zeros(self.vocab_size, dtype=bool)
                     start_node = name_trie.get_node(prefix)
+
                     if start_node is not None:
-                        for t_id in range(self.vocab_size):
-                            s = self.clean_vocab[t_id]
-                            if s and name_trie.is_valid_suffix(start_node, s):
-                                v_mask[t_id] = True
+                        # 1. Grab all valid partial token completions
+                        valid_strings = set(start_node.valid_prefixes)
+
+                        # 2. Grab all valid exact closures (requiring a quote)
+                        for suffix in start_node.valid_suffixes:
+                            valid_strings.add(suffix + '"')
+
+                        # 3. Apply the mask using O(1) dict lookups
+                        for valid_str in valid_strings:
+                            if valid_str in self.string_to_ids:
+                                for t_id in self.string_to_ids[valid_str]:
+                                    v_mask[t_id] = True
+
                     self.prefix_mask_cache[prefix] = v_mask
 
                 mask_matrix[idx, :] = self.prefix_mask_cache[prefix]
