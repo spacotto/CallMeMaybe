@@ -51,8 +51,6 @@ def calculate_prompt_limit(func_name: str,
 
 def main() -> None:
 
-    start = time.time()
-
     # --- CLI SETUP ---
     try:
         cli_parser = argparse.ArgumentParser(
@@ -83,14 +81,14 @@ def main() -> None:
     print(fmt.apply(
         'bold', 'yellow', ">>> Initializing Pipeline..."
     ))
-    start_time = time.time()
+    start_init = time.time()
 
     # --- MODEL INITIALIZATION ---
     try:
         classifier = FunctionClassifier(model_name="Qwen/Qwen3-0.6B")
         schema_extractor = SchemaExtractor(classifier_instance=classifier)
 
-        init = time.time() - start_time
+        init = time.time() - start_init
         print(fmt.apply(
             'bold',
             'cyan',
@@ -108,6 +106,8 @@ def main() -> None:
     if not functions_schema:
         error("Execution aborted: No valid functions schema found.")
         return
+
+    start_pipeline = time.time()
 
     # --- PHASE 1: CLASSIFICATION ---
     try:
@@ -218,7 +218,7 @@ def main() -> None:
         msg = f"\n\n 💾 All results saved to {args.output}"
         print(fmt.apply('bold', 'cyan', msg))
 
-        end = time.time() - start_time
+        end = time.time() - start_pipeline
         if end < 60:
             stopwatch = f' ⏳ Pipeline completed in {end:.1f}s\n'
         else:
