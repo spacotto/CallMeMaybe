@@ -7,6 +7,90 @@ from src.engine.classifier import FunctionClassifier
 from src.visualizer import Visualizer
 
 
+class JSONParserState:
+    """Incremental O(1) State Machine to track JSON generation."""
+
+    def __init__(self) -> None:
+        self.state = "EXPECT_KEY"
+        self.stack: List[Dict[str, Any]] = [{"key": "parameters", "completed": set()}]
+        self.escape = False
+        self.current_key = ""
+        self.pending_key = ""
+        self.depth = 2  # Starts inside {"name": "...", "parameters": {
+
+    def update(self, new_chars: str) -> None:
+        for char in new_chars:
+            if self.escape:
+                self.escape = False
+                continue
+            if char == "\\":
+                self.escape = True
+                continue
+
+            # Track bracket depth for O(1) completion checking
+            if self.state not in ["IN_KEY", "IN_STRING_VALUE"]:
+                if char == '{':
+                    self.depth += 1
+                elif char == '}':
+                    self.depth -= 1
+
+            if self.state == "EXPECT_KEY":
+                if char == '"':
+                    self.state = "IN_KEY"
+                    self.current_key = ""
+                elif char in '}]':
+                    self.state = "EXPECT_COMMA"
+                    if char == '}' and len(self.stack) > 1:
+                        completed_key = self.stack.pop()["key"]
+                        self.stack[-1]["completed"].add(completed_key)
+
+            elif self.state == "IN_KEY":
+                if char == '"':
+                    self.state = "EXPECT_COLON"
+                    self.pending_key = self.current_key
+                else:
+                    self.current_key += char
+
+            elif self.state == "EXPECT_COLON":
+                if char == ':':
+                    self.state = "EXPECT_VALUE"
+
+            elif self.state == "EXPECT_VALUE":
+                if char == '"':
+                    self.state = "IN_STRING_VALUE"
+                elif char in '0123456789-.':
+                    self.state = "IN_NUMBER_VALUE"
+                elif char == '{':
+                    self.state = "EXPECT_KEY"
+                    self.stack.append({"key": self.pending_key, "completed": set()})
+                elif char in 'tfn':
+                    self.state = "IN_LITERAL_VALUE"
+
+            elif self.state == "IN_STRING_VALUE":
+                if char == '"':
+                    self.state = "EXPECT_COMMA"
+                    self.stack[-1]["completed"].add(self.pending_key)
+
+            elif self.state in ["IN_NUMBER_VALUE", "IN_LITERAL_VALUE"]:
+                if char == ',':
+                    self.stack[-1]["completed"].add(self.pending_key)
+                    self.state = "EXPECT_KEY"
+                elif char in '}]':
+                    self.stack[-1]["completed"].add(self.pending_key)
+                    self.state = "EXPECT_COMMA"
+                    if char == '}' and len(self.stack) > 1:
+                        completed_key = self.stack.pop()["key"]
+                        self.stack[-1]["completed"].add(completed_key)
+
+            elif self.state == "EXPECT_COMMA":
+                if char == ',':
+                    self.state = "EXPECT_KEY"
+                elif char in '}]':
+                    if char == '}' and len(self.stack) > 1:
+                        completed_key = self.stack.pop()["key"]
+                        self.stack[-1]["completed"].add(completed_key)
+
+
 class SchemaExtractor:
     """Phase 2 (Fast Path): Context-Aware CFG parser with key-tracking."""
 
@@ -27,8 +111,6 @@ class SchemaExtractor:
             '-.,:;!?@"\'/\\()[]{}*+^$|=~`%&<>'
         )
 
-        # Optimization: Precompute stripped vocabulary to eliminate
-        # string manipulation inside the hot generation loop.
         self.stripped_vocab = [""] * self.vocab_size
 
         for t_id, s in enumerate(self.clean_vocab):
@@ -64,9 +146,7 @@ class SchemaExtractor:
             if all(c in ' \n\r\ttrufalse' for c in s):
                 self.type_masks["boolean"][t_id] = True
 
-        # Optimization: Precompute static indices to eliminate O(V) np.where scans
         self.struct_mask_indices = np.where(self.struct_mask)[0]
-
         base_wildcard = self.wildcard_string_mask & self.safe_quote_mask
         self.wildcard_safe_indices = np.where(base_wildcard)[0]
 
@@ -91,90 +171,6 @@ class SchemaExtractor:
             traverse(k, v)
         return key_map, type_map
 
-    def _get_json_state(
-        self, current_prefix: str
-    ) -> Tuple[str, List[Dict[str, Any]]]:
-        match_obj = re.search(r'"parameters"\s*:\s*\{', current_prefix)
-        stack: List[Dict[str, Any]] = [
-            {"key": "parameters", "completed": set()}
-        ]
-
-        if not match_obj:
-            return "UNKNOWN", stack
-
-        json_part = current_prefix[match_obj.end():]
-        state = "EXPECT_KEY"
-        escape = False
-        current_key = ""
-
-        for char in json_part:
-            if escape:
-                escape = False
-                continue
-            if char == "\\":
-                escape = True
-                continue
-
-            if state == "EXPECT_KEY":
-                if char == '"':
-                    state = "IN_KEY"
-                    current_key = ""
-                elif char in '}]':
-                    state = "EXPECT_COMMA"
-                    if char == '}' and len(stack) > 1:
-                        completed_key = stack.pop()["key"]
-                        completed_set: Set[str] = stack[-1]["completed"]
-                        completed_set.add(completed_key)
-            elif state == "IN_KEY":
-                if char == '"':
-                    state = "EXPECT_COLON"
-                else:
-                    current_key += char
-            elif state == "EXPECT_COLON":
-                if char == ':':
-                    state = "EXPECT_VALUE"
-            elif state == "EXPECT_VALUE":
-                if char == '"':
-                    state = "IN_STRING_VALUE"
-                elif char in '0123456789-.':
-                    state = "IN_NUMBER_VALUE"
-                elif char == '{':
-                    state = "EXPECT_KEY"
-                    stack.append({"key": current_key, "completed": set()})
-                elif char in 'tfn':
-                    state = "IN_LITERAL_VALUE"
-
-            elif state == "IN_STRING_VALUE":
-                if char == '"':
-                    state = "EXPECT_COMMA"
-                    completed_set_str: Set[str] = stack[-1]["completed"]
-                    completed_set_str.add(current_key)
-
-            elif state in ["IN_NUMBER_VALUE", "IN_LITERAL_VALUE"]:
-                if char == ',':
-                    completed_set_num: Set[str] = stack[-1]["completed"]
-                    completed_set_num.add(current_key)
-                    state = "EXPECT_KEY"
-                elif char in '}]':
-                    completed_set_close: Set[str] = stack[-1]["completed"]
-                    completed_set_close.add(current_key)
-                    state = "EXPECT_COMMA"
-                    if char == '}' and len(stack) > 1:
-                        completed_key = stack.pop()["key"]
-                        completed_set_parent: Set[str] = stack[-1]["completed"]
-                        completed_set_parent.add(completed_key)
-
-            elif state == "EXPECT_COMMA":
-                if char == ',':
-                    state = "EXPECT_KEY"
-                elif char in '}]':
-                    if char == '}' and len(stack) > 1:
-                        completed_key = stack.pop()["key"]
-                        completed_set5: Set[str] = stack[-1]["completed"]
-                        completed_set5.add(completed_key)
-
-        return state, stack
-
     def extract_batch(
         self,
         prompts: List[str],
@@ -185,7 +181,10 @@ class SchemaExtractor:
     ) -> List[str]:
         input_sequences = []
         generated_sequences = []
-        current_prefixes = [] # Optimization: Track prefix incrementally
+        current_prefixes = []
+
+        # Optimization: Track parser states incrementally per sequence
+        parser_states = [JSONParserState() for _ in prompts]
 
         for prompt, target_name in zip(prompts, function_names):
             examples = self.formatter.load_examples(target_name)
@@ -203,7 +202,6 @@ class SchemaExtractor:
         is_finished = [False] * len(prompts)
         absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 180
 
-        # Precompute and cache the schema maps for the requested functions
         schema_map_cache = {}
         for func in functions:
             name = func["name"]
@@ -237,13 +235,11 @@ class SchemaExtractor:
             )
 
             for idx, orig_i in enumerate(active_idx):
-                curr = current_prefixes[orig_i]
                 name = function_names[orig_i]
-
-                # Direct O(1) cache lookup instead of rebuilding
                 key_map, type_map = schema_map_cache.get(name, ({"parameters": []}, {}))
 
-                mask = self._get_mask(curr, key_map, type_map)
+                # Pass the incremental state machine object instead of the string
+                mask = self._get_mask(parser_states[orig_i], key_map, type_map)
 
                 if mask.shape[0] < self.vocab_size:
                     padded = np.zeros(self.vocab_size, dtype=bool)
@@ -270,26 +266,31 @@ class SchemaExtractor:
                 new_char = self.tokenizer.decode([next_id])
                 current_prefixes[orig_i] += new_char
 
+                # O(1) State update
+                parser_states[orig_i].update(new_char)
+
                 if orig_i == 0:
-                    state, _ = self._get_json_state(current_prefixes[orig_i])
                     allowed_count = int(np.sum(mask_matrix[idx]))
                     dummy_set = set(range(allowed_count))
                     Visualizer.print_status(
-                        step, new_char, dummy_set, state
+                        step, new_char, dummy_set, parser_states[orig_i].state
                     )
 
-                if self._is_complete(current_prefixes[orig_i], next_id):
+                # O(1) completion check based on tracked bracket depth
+                end_token = self.tokenizer.token_to_id.get("<|im_end|>", -1)
+                if parser_states[orig_i].depth == 0 or next_id == end_token:
                     is_finished[orig_i] = True
 
         Visualizer.print_div()
         return current_prefixes
 
     def _get_mask(
-        self, current_prefix: str, key_map: Dict[str, List[str]],
+        self, parser_state: JSONParserState, key_map: Dict[str, List[str]],
         type_map: Dict[str, str]
     ) -> np.ndarray:
         mask = np.ones(self.vocab_size, dtype=bool)
-        state, stack = self._get_json_state(current_prefix)
+        state = parser_state.state
+        stack = parser_state.stack
         in_string = state in ["IN_KEY", "IN_STRING_VALUE"]
 
         if not in_string:
@@ -299,7 +300,6 @@ class SchemaExtractor:
             completed: Set[str] = stack[-1]["completed"] if stack else set()
             valid = [k for k in key_map.get(parent_key, []) if k not in completed]
 
-            # Optimization: Use precomputed static indices
             for t_id in self.struct_mask_indices:
                 s_strip = self.stripped_vocab[t_id]
 
@@ -339,18 +339,16 @@ class SchemaExtractor:
             mask &= self.safe_quote_mask
 
             if state == "EXPECT_VALUE":
-                matches = re.findall(r'"([^"]+)"\s*:', current_prefix)
-                if matches:
-                    pending_key = matches[-1]
-                    e_type = type_map.get(pending_key, "string")
-                    if e_type == "object":
-                        mask &= self.type_masks["object"]
-                    elif e_type in ["integer", "number"]:
-                        mask &= self.type_masks["number"]
-                    elif e_type == "string":
-                        mask &= self.type_masks["string"]
-                    elif e_type == "boolean":
-                        mask &= self.type_masks["boolean"]
+                # Optimization: No regex needed. The state machine tracks pending_key directly.
+                e_type = type_map.get(parser_state.pending_key, "string")
+                if e_type == "object":
+                    mask &= self.type_masks["object"]
+                elif e_type in ["integer", "number"]:
+                    mask &= self.type_masks["number"]
+                elif e_type == "string":
+                    mask &= self.type_masks["string"]
+                elif e_type == "boolean":
+                    mask &= self.type_masks["boolean"]
 
         else:
             mask &= self.wildcard_string_mask
@@ -360,53 +358,27 @@ class SchemaExtractor:
                 parent = stack[-1]["key"] if stack else ""
                 completed_keys: Set[str] = stack[-1]["completed"] if stack else set()
                 valid = [k for k in key_map.get(parent, []) if k not in completed_keys]
-                key_match = re.search(r'"([^"]*)$', current_prefix)
-                if key_match:
-                    prefix = key_match.group(1)
-                    cache_k = f"{','.join(sorted(valid))}|{prefix}"
-                    if cache_k not in self.key_mask_cache:
-                        v_mask = np.zeros(self.vocab_size, dtype=bool)
 
-                        # Optimization: Use precomputed indices directly
-                        for t_id in self.wildcard_safe_indices:
-                            s = self.clean_vocab[t_id]
-                            if s:
-                                s_val = s[:-1] if s.endswith('"') else s
-                                prop = prefix + s_val
-                                allowed = any(v.startswith(prop) for v in valid)
-                                closure = any(prop == v for v in valid) and s.endswith('"')
-                                if allowed and (not s.endswith('"') or closure):
-                                    v_mask[t_id] = True
-                        self.key_mask_cache[cache_k] = v_mask
-                    mask &= self.key_mask_cache[cache_k]
+                # Optimization: No regex needed. The state machine tracks current_key directly.
+                prefix = parser_state.current_key
+                cache_k = f"{','.join(sorted(valid))}|{prefix}"
+
+                if cache_k not in self.key_mask_cache:
+                    v_mask = np.zeros(self.vocab_size, dtype=bool)
+
+                    for t_id in self.wildcard_safe_indices:
+                        s = self.clean_vocab[t_id]
+                        if s:
+                            s_val = s[:-1] if s.endswith('"') else s
+                            prop = prefix + s_val
+                            allowed = any(v.startswith(prop) for v in valid)
+                            closure = any(prop == v for v in valid) and s.endswith('"')
+                            if allowed and (not s.endswith('"') or closure):
+                                v_mask[t_id] = True
+                    self.key_mask_cache[cache_k] = v_mask
+                mask &= self.key_mask_cache[cache_k]
 
         if not np.any(mask):
             mask = self.wildcard_string_mask | self.safe_quote_mask
 
         return mask
-
-    def _is_complete(self, text: str, last_token_id: int) -> bool:
-        if last_token_id == self.tokenizer.token_to_id.get("<|im_end|>", -1):
-            return True
-        if not text or "{" not in text:
-            return False
-        json_str = text[text.find("{"):]
-        depth, in_string, escape = 0, False, False
-        for char in json_str:
-            if escape:
-                escape = False
-                continue
-            if char == "\\":
-                escape = True
-                continue
-            if char == '"':
-                in_string = not in_string
-                continue
-            if not in_string:
-                if char == "{":
-                    depth += 1
-                elif char == "}":
-                    depth -= 1
-                    if depth == 0:
-                        return True
-        return False
