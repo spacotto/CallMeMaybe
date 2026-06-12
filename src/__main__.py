@@ -113,14 +113,17 @@ def main() -> None:
         print(fmt.apply('bold', 'yellow', msg))
         print(fmt.apply(None, 'gray', "-" * 70))
 
-        BATCH_SIZE = 32
+        # FIX: Process sequentially (Batch Size 1) during verbose mode
+        # to prevent concurrent token logs from interleaving on the console.
+        BATCH_SIZE = 1 if args.verbose else 32
         target_names: List[str] = []
         json_results: List[str] = []
 
         generation_start = time.time()
 
-        # Batch processing prevents Memory exhaustion (OOM) on large test sets
         for batch_idx, batch_prompts in enumerate(chunk_data(prompts, BATCH_SIZE)):
+            if args.verbose and BATCH_SIZE != 1:
+                print(fmt.apply('bold', 'cyan', f"Processing Batch {batch_idx + 1}..."))
 
             # Phase 1: Classification
             batch_targets = classifier.classify_batch(batch_prompts, functions_schema)
@@ -137,12 +140,17 @@ def main() -> None:
                     limit += 50
                 batch_limits.append(limit)
 
+            if BATCH_SIZE == 1:
+                abs_idx = len(json_results) + 1
+                Visualizer.print_prompt_start(abs_idx, len(prompts), batch_prompts[0])
+
             # Phase 2: Extraction
             batch_results = schema_extractor.extract_batch(
                 prompts=batch_prompts,
                 function_names=batch_targets,
                 functions=functions_schema,
                 max_new_tokens_list=batch_limits,
+                verbose=True
             )
             json_results.extend(batch_results)
 
@@ -162,10 +170,7 @@ def main() -> None:
             zip(prompts, target_names, json_results)
         ):
             try:
-                if args.verbose:
-                    Visualizer.print_prompt_start(
-                        idx + 1, len(prompts), prompt
-                    )
+                # Removed Visualizer.print_prompt_start here to avoid double-printing
 
                 final_item = PostProcessor.process_result(
                     prompt,

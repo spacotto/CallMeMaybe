@@ -152,7 +152,6 @@ class SchemaExtractor:
 
         self.key_mask_cache: Dict[str, np.ndarray] = {}
 
-        # NEW: Instance-level global cache for schema maps
         self.global_schema_cache: Dict[str, Tuple[Dict[str, List[str]], Dict[str, str]]] = {}
 
     def _build_schema_maps(
@@ -204,7 +203,6 @@ class SchemaExtractor:
         is_finished = [False] * len(prompts)
         absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 180
 
-        # UPGRADE: Populate instance-level cache only for newly seen schemas
         for func in functions:
             name = func["name"]
             if name not in self.global_schema_cache:
@@ -240,7 +238,6 @@ class SchemaExtractor:
             for idx, orig_i in enumerate(active_idx):
                 name = function_names[orig_i]
 
-                # Fetch directly from the global cache
                 key_map, type_map = self.global_schema_cache.get(name, ({"parameters": []}, {}))
 
                 mask = self._get_mask(parser_states[orig_i], key_map, type_map)
@@ -272,7 +269,8 @@ class SchemaExtractor:
 
                 parser_states[orig_i].update(new_char)
 
-                if orig_i == 0:
+                # FIX: Tie visualization to the verbose flag, tracking the active token
+                if verbose:
                     allowed_count = int(np.sum(mask_matrix[idx]))
                     dummy_set = set(range(allowed_count))
                     Visualizer.print_status(
@@ -283,7 +281,8 @@ class SchemaExtractor:
                 if parser_states[orig_i].depth == 0 or next_id == end_token:
                     is_finished[orig_i] = True
 
-        Visualizer.print_div()
+        if verbose:
+            Visualizer.print_div()
         return current_prefixes
 
     def _get_mask(

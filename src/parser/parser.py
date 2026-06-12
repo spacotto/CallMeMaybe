@@ -26,7 +26,7 @@ class SchemaParser(BaseModel):
                 error("Invalid schema format: Root element must be a list.")
                 return []
 
-            # FIX: Enforce strict Pydantic validation on the input schema
+            # Enforce strict Pydantic validation on the input schema
             validated_schema = []
             for item in raw_data:
                 try:
