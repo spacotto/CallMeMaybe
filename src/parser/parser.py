@@ -1,9 +1,10 @@
 import json
 import os
 from typing import List, Dict, Any
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
 from src.utils import error
+from src.parser.models.function_definition import FunctionDefinition
 
 
 class SchemaParser(BaseModel):
@@ -25,9 +26,21 @@ class SchemaParser(BaseModel):
                 error("Invalid schema format: Root element must be a list.")
                 return []
 
-            # Bypass strict Pydantic validation to preserve
-            # nested schemas
-            return raw_data
+            # FIX: Enforce strict Pydantic validation on the input schema
+            validated_schema = []
+            for item in raw_data:
+                try:
+                    # Validate the structure using Pydantic
+                    validated_item = FunctionDefinition(**item)
+                    # Dump back to dictionary format for the rest of the pipeline to use
+                    validated_schema.append(validated_item.model_dump(exclude_none=True))
+                except ValidationError as ve:
+                    func_name = item.get("name", "Unknown Function")
+                    error(f"Pydantic Validation Error in schema '{func_name}': {ve}")
+                    # Skip malformed functions to prevent downstream crashes
+                    continue
+
+            return validated_schema
 
         except json.JSONDecodeError as e:
             error(f"Failed to parse JSON schema: Syntax error at {e}")

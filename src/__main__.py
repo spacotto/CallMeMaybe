@@ -121,8 +121,6 @@ def main() -> None:
 
         # Batch processing prevents Memory exhaustion (OOM) on large test sets
         for batch_idx, batch_prompts in enumerate(chunk_data(prompts, BATCH_SIZE)):
-            if args.verbose:
-                print(fmt.apply('bold', 'cyan', f"Processing Batch {batch_idx + 1}..."))
 
             # Phase 1: Classification
             batch_targets = classifier.classify_batch(batch_prompts, functions_schema)
@@ -185,7 +183,6 @@ def main() -> None:
 
             except Exception as item_e:
                 error(f"Critical Parsing Error on item {idx+1}: {item_e}")
-                # Strictly compliant fallback to prevent Moulinette structural failures
                 results.append({
                     "prompt": prompt,
                     "name": target_name,
