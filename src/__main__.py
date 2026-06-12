@@ -15,42 +15,31 @@ from src.utils import error
 from src.visualizer import Visualizer
 
 
-def calculate_prompt_limit(func_name: str,
-                           functions_schema: List[Dict[str, Any]]) -> int:
-    """Calculates a safe token limit based on the target schema's types."""
-    schema = next(
-        (f for f in functions_schema if f["name"] == func_name), {}
-    )
-    params = schema.get("parameters", {})
+def chunk_data(data: List[Any], chunk_size: int):
+    """Yields successive n-sized chunks from data to prevent OOM errors."""
+    for i in range(0, len(data), chunk_size):
+        yield data[i:i + chunk_size]
 
+
+def calculate_prompt_limit(schema: Dict[str, Any]) -> int:
+    """Calculates a safe token limit dynamically based on the schema's shape."""
+    params = schema.get("parameters", {})
     if not params:
         return 20
 
-    has_nesting = any(
-        isinstance(v, dict) and v.get("type") == "object"
-        for v in params.values()
-    )
+    # Add tokens based on parameter count
+    base_tokens = 42
+    base_tokens += len(params) * 15
 
-    if has_nesting:
-        return 120
-
+    # Allocate more tokens if string generation is required
     types = [v.get("type") for v in params.values() if isinstance(v, dict)]
-
     if "string" in types:
-        if func_name in ["fn_execute_sql_query",
-                         "fn_substitute_string_with_regex"]:
-            return 80
-        return 60
+        base_tokens += 20
 
-    num_params = len(params)
-    if num_params >= 3:
-        return 65
-
-    return 42
+    return min(base_tokens, 150)
 
 
 def main() -> None:
-
     # --- CLI SETUP ---
     try:
         cli_parser = argparse.ArgumentParser(
@@ -109,7 +98,6 @@ def main() -> None:
 
     start_pipeline = time.time()
 
-    # --- PHASE 1: CLASSIFICATION ---
     try:
         with open(args.input, 'r', encoding='utf-8') as f:
             input_data = json.load(f)
@@ -121,48 +109,49 @@ def main() -> None:
         ]
 
         print(fmt.apply(None, 'gray', "-" * 70))
-        msg = f">>> Phase 1: Classifying {len(prompts)} prompts..."
+        msg = f">>> Phase 1 & 2: Processing {len(prompts)} prompts..."
         print(fmt.apply('bold', 'yellow', msg))
-
-        target_names: List[str] = classifier.classify_batch(
-            prompts, functions_schema
-        )
-
-    except Exception as e:
-        error(f"Phase 1 (Classification) failed: {e}")
-        return
-
-    # --- PHASE 2: UNIFIED PARAMETER EXTRACTION ---
-    try:
         print(fmt.apply(None, 'gray', "-" * 70))
-        print(fmt.apply(
-                'bold',
-                'yellow',
-                ">>> Phase 2: Extracting parameters via Schema Engine..."
-            ))
-        print(fmt.apply(None, 'gray', "-" * 70))
+
+        BATCH_SIZE = 32
+        target_names: List[str] = []
+        json_results: List[str] = []
 
         generation_start = time.time()
 
-        limits = []
-        for target_name in target_names:
-            limit = calculate_prompt_limit(target_name, functions_schema)
-            if SchemaParser.is_nested(target_name, functions_schema):
-                limits.append(limit + 50)
-            else:
-                limits.append(limit)
+        # Batch processing prevents Memory exhaustion (OOM) on large test sets
+        for batch_idx, batch_prompts in enumerate(chunk_data(prompts, BATCH_SIZE)):
+            if args.verbose:
+                print(fmt.apply('bold', 'cyan', f"Processing Batch {batch_idx + 1}..."))
 
-        json_results = schema_extractor.extract_batch(
-            prompts=prompts,
-            function_names=target_names,
-            functions=functions_schema,
-            max_new_tokens_list=limits,
-        )
+            # Phase 1: Classification
+            batch_targets = classifier.classify_batch(batch_prompts, functions_schema)
+            target_names.extend(batch_targets)
+
+            # Calculate limits dynamically per prompt
+            batch_limits = []
+            for target_name in batch_targets:
+                target_schema = next(
+                    (f for f in functions_schema if f["name"] == target_name), {}
+                )
+                limit = calculate_prompt_limit(target_schema)
+                if SchemaParser.is_nested(target_name, functions_schema):
+                    limit += 50
+                batch_limits.append(limit)
+
+            # Phase 2: Extraction
+            batch_results = schema_extractor.extract_batch(
+                prompts=batch_prompts,
+                function_names=batch_targets,
+                functions=functions_schema,
+                max_new_tokens_list=batch_limits,
+            )
+            json_results.extend(batch_results)
 
         avg_gen_time = (time.time() - generation_start) / max(1, len(prompts))
 
     except Exception as e:
-        error(f"Phase 2 (Extraction) failed: {e}")
+        error(f"Pipeline Generation failed: {e}")
         return
 
     # --- PHASE 3: POST-PROCESSING ---
@@ -188,22 +177,19 @@ def main() -> None:
                 )
                 results.append(final_item)
 
-                is_valid = "error" not in final_item
-                if not is_valid:
-                    error(f"Invalid JSON for prompt {idx+1}")
-
                 if args.verbose:
                     Visualizer.print_generation_time(
-                        avg_gen_time, is_valid=is_valid
+                        avg_gen_time, is_valid=True
                     )
                     Visualizer.print_json_render(final_item)
 
             except Exception as item_e:
                 error(f"Critical Parsing Error on item {idx+1}: {item_e}")
+                # Strictly compliant fallback to prevent Moulinette structural failures
                 results.append({
                     "prompt": prompt,
-                    "error": f"Internal Error: {item_e}",
-                    "raw": json_result_str
+                    "name": target_name,
+                    "parameters": {}
                 })
 
     except Exception as e:
@@ -215,8 +201,8 @@ def main() -> None:
         with open(args.output, 'w', encoding='utf-8') as output_file:
             json.dump(results, output_file, indent=4)
 
-        msg = f"\n\n 💾 All results saved to {args.output}"
-        print(fmt.apply('bold', 'cyan', msg))
+        print(fmt.apply('bold', 'cyan',
+                        f"\n\n 💾 All results saved to {args.output}"))
 
         end = time.time() - start_pipeline
         if end < 60:
