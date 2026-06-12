@@ -152,6 +152,9 @@ class SchemaExtractor:
 
         self.key_mask_cache: Dict[str, np.ndarray] = {}
 
+        # NEW: Instance-level global cache for schema maps
+        self.global_schema_cache: Dict[str, Tuple[Dict[str, List[str]], Dict[str, str]]] = {}
+
     def _build_schema_maps(
         self, properties: Dict[str, Any]
     ) -> Tuple[Dict[str, List[str]], Dict[str, str]]:
@@ -183,7 +186,6 @@ class SchemaExtractor:
         generated_sequences = []
         current_prefixes = []
 
-        # Optimization: Track parser states incrementally per sequence
         parser_states = [JSONParserState() for _ in prompts]
 
         for prompt, target_name in zip(prompts, function_names):
@@ -202,11 +204,12 @@ class SchemaExtractor:
         is_finished = [False] * len(prompts)
         absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 180
 
-        schema_map_cache = {}
+        # UPGRADE: Populate instance-level cache only for newly seen schemas
         for func in functions:
             name = func["name"]
-            params = func.get("parameters", {})
-            schema_map_cache[name] = self._build_schema_maps(params)
+            if name not in self.global_schema_cache:
+                params = func.get("parameters", {})
+                self.global_schema_cache[name] = self._build_schema_maps(params)
 
         for step in range(absolute_max_steps):
             if all(is_finished):
@@ -236,9 +239,10 @@ class SchemaExtractor:
 
             for idx, orig_i in enumerate(active_idx):
                 name = function_names[orig_i]
-                key_map, type_map = schema_map_cache.get(name, ({"parameters": []}, {}))
 
-                # Pass the incremental state machine object instead of the string
+                # Fetch directly from the global cache
+                key_map, type_map = self.global_schema_cache.get(name, ({"parameters": []}, {}))
+
                 mask = self._get_mask(parser_states[orig_i], key_map, type_map)
 
                 if mask.shape[0] < self.vocab_size:
@@ -266,7 +270,6 @@ class SchemaExtractor:
                 new_char = self.tokenizer.decode([next_id])
                 current_prefixes[orig_i] += new_char
 
-                # O(1) State update
                 parser_states[orig_i].update(new_char)
 
                 if orig_i == 0:
@@ -276,7 +279,6 @@ class SchemaExtractor:
                         step, new_char, dummy_set, parser_states[orig_i].state
                     )
 
-                # O(1) completion check based on tracked bracket depth
                 end_token = self.tokenizer.token_to_id.get("<|im_end|>", -1)
                 if parser_states[orig_i].depth == 0 or next_id == end_token:
                     is_finished[orig_i] = True
@@ -339,7 +341,6 @@ class SchemaExtractor:
             mask &= self.safe_quote_mask
 
             if state == "EXPECT_VALUE":
-                # Optimization: No regex needed. The state machine tracks pending_key directly.
                 e_type = type_map.get(parser_state.pending_key, "string")
                 if e_type == "object":
                     mask &= self.type_masks["object"]
@@ -359,7 +360,6 @@ class SchemaExtractor:
                 completed_keys: Set[str] = stack[-1]["completed"] if stack else set()
                 valid = [k for k in key_map.get(parent, []) if k not in completed_keys]
 
-                # Optimization: No regex needed. The state machine tracks current_key directly.
                 prefix = parser_state.current_key
                 cache_k = f"{','.join(sorted(valid))}|{prefix}"
 
