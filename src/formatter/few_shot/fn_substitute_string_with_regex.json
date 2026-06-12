@@ -8,14 +8,6 @@
     }
   },
   {
-    "prompt": "Take the phrase 'Programming is fun' and swap out every vowel for an *.",
-    "parameters": {
-      "source_string": "Programming is fun",
-      "regex": "[aeiouAEIOU]",
-      "replacement": "*"
-    }
-  },
-  {
     "prompt": "In the text 'The cat sat on the mat with another cat', switch the word 'cat' to 'dog'.",
     "parameters": {
       "source_string": "The cat sat on the mat with another cat",
