@@ -20,8 +20,6 @@ class FunctionClassifier:
         else:
             self.formatter = Formatter(format_type=ModelFormat.INSTRUCT)
 
-        # Precompute minimal vocabulary setup
-        # (only string literals needed for classification)
         ids = self.tokenizer.id_to_token.keys()
         max_id = max(ids) if ids else 151643
         self.vocab_size = max_id + 1
@@ -45,6 +43,7 @@ class FunctionClassifier:
 
         input_sequences = []
         generated_sequences = []
+        current_prefixes = [""] * batch_size
 
         for prompt in prompts:
             primed = self.formatter.build_classification_prompt(
@@ -55,8 +54,8 @@ class FunctionClassifier:
             escaped_prompt = json.dumps(prompt)[1:-1]
             boilerplate_start = f'{{"prompt": "{escaped_prompt}", "name": "'
             generated_sequences.append(
-                    self.tokenizer.encode(boilerplate_start)
-                )
+                self.tokenizer.encode(boilerplate_start)
+            )
 
         is_finished = [False] * batch_size
         extracted_names = [""] * batch_size
@@ -84,9 +83,7 @@ class FunctionClassifier:
             )
 
             for idx, orig_i in enumerate(active_indices):
-                curr_p = self.tokenizer.decode(generated_sequences[orig_i])
-                parts = curr_p.rsplit('"', 1)
-                prefix = parts[1] if len(parts) > 1 else ""
+                prefix = current_prefixes[orig_i]
 
                 if prefix not in self.prefix_mask_cache:
                     v_mask = np.zeros(self.vocab_size, dtype=bool)
@@ -116,11 +113,14 @@ class FunctionClassifier:
             for idx, orig_i in enumerate(active_indices):
                 next_id = int(next_token_ids[idx])
                 generated_sequences[orig_i].append(next_id)
-                new_p = self.tokenizer.decode(generated_sequences[orig_i])
 
-                if new_p.endswith('"'):
+                new_char = self.tokenizer.decode([next_id])
+
+                if '"' in new_char:
                     is_finished[orig_i] = True
-                    parts = new_p.rsplit('"', 2)
-                    extracted_names[orig_i] = parts[-2]
+                    final_part = new_char.split('"')[0]
+                    extracted_names[orig_i] = current_prefixes[orig_i] + final_part
+                else:
+                    current_prefixes[orig_i] += new_char
 
         return extracted_names

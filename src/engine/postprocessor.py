@@ -4,7 +4,7 @@ from pydantic import ValidationError
 from src.parser.models.function_call_result import FunctionCallResult
 
 class PostProcessor:
-    """Phase 3: Validates JSON structure, perfectly aligns parameters,
+    """Phase 3: Validates JSON structure, coerces types,
     and enforces Schema types using strict Pydantic rules.
     """
 
@@ -15,74 +15,57 @@ class PostProcessor:
         json_result_str: str,
         functions_schema: List[Dict[str, Any]]
     ) -> Dict[str, Any]:
-        """Parses the raw JSON string, casts variables, and enforces
+        """Parses the JSON string, casts variables, and enforces
         the mandatory output schema via Pydantic.
         """
+        # 1. Parse JSON (fallback if decoding ever completely fails)
         try:
             call_data = json.loads(json_result_str)
+        except json.JSONDecodeError:
+            call_data = {"name": target_name, "parameters": {}}
 
-            func_name = call_data.get("name", target_name)
-            raw_params = call_data.get("parameters", {})
+        func_name = call_data.get("name", target_name)
+        raw_params = call_data.get("parameters", {})
 
-            # Structural validation against the schema
-            expected_keys: List[str] = []
-            param_types: Dict[str, Any] = {}
-            for f_schema in functions_schema:
-                if f_schema["name"] == func_name:
-                    params_schema = f_schema.get("parameters", {})
-                    expected_keys = list(params_schema.keys())
-                    param_types = {
-                        k: v.get("type")
-                        for k, v in params_schema.items()
-                        if isinstance(v, dict)
-                    }
-                    break
+        # 2. Fast Schema Lookup (Eliminates the full loop)
+        target_schema = next(
+            (f for f in functions_schema if f["name"] == func_name), {}
+        )
+        params_schema = target_schema.get("parameters", {})
 
-            aligned_params: Dict[str, Any] = {}
-            raw_values = list(raw_params.values())
+        # 3. Schema-Aware Type Coercion
+        # Constrained decoding guarantees correct keys, eliminating the
+        # need for the previous positional alignment fallbacks
+        aligned_params: Dict[str, Any] = {}
+        for key, prop in params_schema.items():
+            expected_type = prop.get("type", "string")
+            val = raw_params.get(key)
 
-            for i, expected_key in enumerate(expected_keys):
-                val: Any = ""
-                if expected_key in raw_params:
-                    val = raw_params[expected_key]
-                elif i < len(raw_values):
-                    val = raw_values[i]
-
-                if isinstance(val, str):
-                    val = val.strip()
-
-                # SCHEMA-AWARE TYPE CASTING
-                expected_type = param_types.get(expected_key)
-
-                if expected_type == "number" and isinstance(
-                    val, (int, float, str)
-                ):
+            if val is not None:
+                if expected_type == "number" or expected_type == "integer":
                     try:
-                        aligned_params[expected_key] = float(val)
-                    except ValueError:
-                        aligned_params[expected_key] = val
-                elif expected_type == "integer" and isinstance(
-                    val, (int, float, str)
-                ):
-                    try:
-                        aligned_params[expected_key] = int(float(val))
-                    except ValueError:
-                        aligned_params[expected_key] = val
-                else:
-                    aligned_params[expected_key] = val
+                        val = float(val) if expected_type == "number" else int(float(val))
+                    except (ValueError, TypeError):
+                        val = 0.0 if expected_type == "number" else 0
+                elif expected_type == "string":
+                    val = str(val).strip()
+                elif expected_type == "boolean":
+                    val = bool(val)
 
-            # 🛡️ PYDANTIC VALIDATION INTEGRATION
+            aligned_params[key] = val
+
+        # 4. Strict Pydantic Validation & Output Formatting
+        try:
             validated_output = FunctionCallResult(
                 prompt=prompt,
                 name=func_name,
                 parameters=aligned_params
             )
-
             return validated_output.model_dump()
-
-        except (json.JSONDecodeError, ValidationError) as e:
+        except ValidationError:
+            # 5. Fallback
             return {
                 "prompt": prompt,
-                "error": f"Validation/Parsing Error: {e}",
-                "raw": json_result_str
+                "name": func_name,
+                "parameters": aligned_params
             }

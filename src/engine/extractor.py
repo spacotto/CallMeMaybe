@@ -8,7 +8,7 @@ from src.visualizer import Visualizer
 
 
 class SchemaExtractor:
-    """Phase 2 (Slow Path): Context-Aware CFG parser with key-tracking."""
+    """Phase 2 (Fast Path): Context-Aware CFG parser with key-tracking."""
 
     def __init__(self, classifier_instance: FunctionClassifier) -> None:
         self.sdk = classifier_instance.sdk
@@ -27,9 +27,16 @@ class SchemaExtractor:
             '-.,:;!?@"\'/\\()[]{}*+^$|=~`%&<>'
         )
 
+        # Optimization: Precompute stripped vocabulary to eliminate
+        # string manipulation inside the hot generation loop.
+        self.stripped_vocab = [""] * self.vocab_size
+
         for t_id, s in enumerate(self.clean_vocab):
             if not s:
                 continue
+
+            self.stripped_vocab[t_id] = s.lstrip(' \n\r\t')
+
             t_chars = set(s)
             if t_chars.issubset(struct_chars):
                 self.struct_mask[t_id] = True
@@ -172,6 +179,7 @@ class SchemaExtractor:
     ) -> List[str]:
         input_sequences = []
         generated_sequences = []
+        current_prefixes = [] # Optimization: Track prefix incrementally
 
         for prompt, target_name in zip(prompts, function_names):
             examples = self.formatter.load_examples(target_name)
@@ -184,6 +192,7 @@ class SchemaExtractor:
             input_sequences.append(self.tokenizer.encode(primed))
             start_str = f'{{"name": "{target_name}", "parameters": {{'
             generated_sequences.append(self.tokenizer.encode(start_str))
+            current_prefixes.append(start_str)
 
         is_finished = [False] * len(prompts)
         absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 180
@@ -215,7 +224,7 @@ class SchemaExtractor:
             )
 
             for idx, orig_i in enumerate(active_idx):
-                curr = self.tokenizer.decode(generated_sequences[orig_i])
+                curr = current_prefixes[orig_i]
                 name = function_names[orig_i]
                 schema = next((f for f in functions if f["name"] == name), {})
                 params = schema.get("parameters", {})
@@ -243,22 +252,23 @@ class SchemaExtractor:
             for idx, orig_i in enumerate(active_idx):
                 next_id = int(next_ids[idx])
                 generated_sequences[orig_i].append(next_id)
-                new_seq = generated_sequences[orig_i]
+
+                new_char = self.tokenizer.decode([next_id])
+                current_prefixes[orig_i] += new_char
 
                 if orig_i == 0:
-                    curr_str = self.tokenizer.decode(new_seq)
-                    state, _ = self._get_json_state(curr_str)
+                    state, _ = self._get_json_state(current_prefixes[orig_i])
                     allowed_count = int(np.sum(mask_matrix[idx]))
                     dummy_set = set(range(allowed_count))
                     Visualizer.print_status(
-                        step, self.tokenizer.decode([next_id]), dummy_set, state
+                        step, new_char, dummy_set, state
                     )
 
-                if self._is_complete(self.tokenizer.decode(new_seq), next_id):
+                if self._is_complete(current_prefixes[orig_i], next_id):
                     is_finished[orig_i] = True
 
         Visualizer.print_div()
-        return [self.tokenizer.decode(s) for s in generated_sequences]
+        return current_prefixes
 
     def _get_mask(
         self, current_prefix: str, key_map: Dict[str, List[str]],
@@ -276,8 +286,8 @@ class SchemaExtractor:
             valid = [k for k in key_map.get(parent_key, []) if k not in completed]
 
             for t_id in np.where(self.struct_mask)[0]:
-                v_char = self.clean_vocab[t_id]
-                s_strip = v_char.lstrip(' \n\r\t')
+                # Optimization: Using the precomputed stripped list
+                s_strip = self.stripped_vocab[t_id]
 
                 if state == "EXPECT_KEY":
                     if not s_strip:
