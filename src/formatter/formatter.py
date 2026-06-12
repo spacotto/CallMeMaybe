@@ -17,17 +17,27 @@ class Formatter:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         self.examples_dir = os.path.join(current_dir, "few_shot")
 
+        # Optimization: In-memory cache to eliminate redundant Disk I/O
+        self._examples_cache: Dict[str, List[Dict[str, Any]]] = {}
+
     def load_examples(self, func_name: str) -> List[Dict[str, Any]]:
-        """Dynamically loads few-shot examples for a specific function."""
+        """Dynamically loads few-shot examples with O(1) memory caching."""
+        if func_name in self._examples_cache:
+            return self._examples_cache[func_name]
+
         filepath = os.path.join(self.examples_dir, f"{func_name}.json")
+        examples = []
         if os.path.exists(filepath):
             try:
                 with open(filepath, 'r', encoding='utf-8') as f:
-                    return cast(List[Dict[str, Any]], json.load(f))
+                    examples = cast(List[Dict[str, Any]], json.load(f))
             except json.JSONDecodeError as e:
                 print(f"Warning: Failed to parse examples for "
                       f"{func_name}: {e}")
-        return []
+
+        # Cache the result (even if empty, to prevent repeated failed reads)
+        self._examples_cache[func_name] = examples
+        return examples
 
     def build_classification_prompt(
         self, user_prompt: str, functions: List[Dict[str, Any]]
@@ -56,7 +66,6 @@ class Formatter:
             "Generate ONLY the raw JSON object."
         )
 
-        # Classification keeps a simple system/user structure
         if self.format_type == ModelFormat.CHATML:
             return (
                 f"<|im_start|>system\n{system_instruction}<|im_end|>\n"
@@ -84,7 +93,6 @@ class Formatter:
         )
         schema_str = json.dumps(target_schema, indent=2)
 
-        # 🛠️ FIX 1: Hardcoded text heuristics stripped out completely.
         system_instruction = (
             "You are a precise data extraction engine.\n"
             f"The user's request maps to the function: '{target_name}'.\n"
@@ -97,7 +105,6 @@ class Formatter:
             "Generate ONLY the raw JSON object."
         )
 
-        # 🛠️ FIX 2: Structure examples as real native message cycles
         if self.format_type == ModelFormat.CHATML:
             return self._build_chatml_extraction(
                 system_instruction, user_prompt, target_name, examples
@@ -115,50 +122,49 @@ class Formatter:
         self, system_instruction: str, user_prompt: str,
         target_name: str, examples: List[Dict[str, Any]]
     ) -> str:
-        """Assembles a ChatML prompt stream with explicit dialogue turns."""
-        prompt = f"<|im_start|>system\n{system_instruction}<|im_end|>\n"
+        """Assembles a ChatML prompt using highly optimized list joining."""
+        parts = [f"<|im_start|>system\n{system_instruction}<|im_end|>\n"]
 
         for ex in examples:
-            prompt += f"<|im_start|>user\n{ex.get('prompt', '')}<|im_end|>\n"
+            parts.append(f"<|im_start|>user\n{ex.get('prompt', '')}<|im_end|>\n")
             expected_output = {
                 "name": target_name,
                 "parameters": ex.get('parameters', {})
             }
             out_str = json.dumps(expected_output)
-            prompt += f"<|im_start|>assistant\n{out_str}<|im_end|>\n"
+            parts.append(f"<|im_start|>assistant\n{out_str}<|im_end|>\n")
 
-        prompt += f"<|im_start|>user\n{user_prompt}<|im_end|>\n"
-        prompt += f"<|im_start|>assistant\n"
-        return prompt
+        parts.append(f"<|im_start|>user\n{user_prompt}<|im_end|>\n")
+        parts.append("<|im_start|>assistant\n")
+
+        return "".join(parts)
 
     def _build_instruct_extraction(
         self, system_instruction: str, user_prompt: str,
         target_name: str, examples: List[Dict[str, Any]]
     ) -> str:
-        """Assembles an Instruct prompt stream with explicit turn switches."""
-        prompt = f"[INST] <<SYS>>\n{system_instruction}\n<</SYS>>\n\n"
+        """Assembles an Instruct prompt using highly optimized list joining."""
+        parts = [f"[INST] <<SYS>>\n{system_instruction}\n<</SYS>>\n\n"]
 
         if examples:
-            # First example closes the initial system context tag block
             ex = examples[0]
-            prompt += f"{ex.get('prompt', '')} [/INST] "
+            parts.append(f"{ex.get('prompt', '')} [/INST] ")
             expected_output = {
                 "name": target_name,
                 "parameters": ex.get('parameters', {})
             }
-            prompt += f"{json.dumps(expected_output)} </s>"
+            parts.append(f"{json.dumps(expected_output)} </s>")
 
-            # Chain subsequent sample inputs cleanly
             for ex in examples[1:]:
-                prompt += f" <s>[INST] {ex.get('prompt', '')} [/INST] "
+                parts.append(f" <s>[INST] {ex.get('prompt', '')} [/INST] ")
                 expected_output = {
                     "name": target_name,
                     "parameters": ex.get('parameters', {})
                 }
-                prompt += f"{json.dumps(expected_output)} </s>"
+                parts.append(f"{json.dumps(expected_output)} </s>")
 
-            prompt += f" <s>[INST] {user_prompt} [/INST]"
+            parts.append(f" <s>[INST] {user_prompt} [/INST]")
         else:
-            prompt += f"{user_prompt} [/INST]"
+            parts.append(f"{user_prompt} [/INST]")
 
-        return prompt
+        return "".join(parts)
