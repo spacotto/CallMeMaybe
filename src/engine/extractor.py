@@ -197,6 +197,13 @@ class SchemaExtractor:
         is_finished = [False] * len(prompts)
         absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 180
 
+        # Precompute and cache the schema maps for the requested functions
+        schema_map_cache = {}
+        for func in functions:
+            name = func["name"]
+            params = func.get("parameters", {})
+            schema_map_cache[name] = self._build_schema_maps(params)
+
         for step in range(absolute_max_steps):
             if all(is_finished):
                 break
@@ -226,11 +233,12 @@ class SchemaExtractor:
             for idx, orig_i in enumerate(active_idx):
                 curr = current_prefixes[orig_i]
                 name = function_names[orig_i]
-                schema = next((f for f in functions if f["name"] == name), {})
-                params = schema.get("parameters", {})
-                key_map, type_map = self._build_schema_maps(params)
+
+                # Direct O(1) cache lookup instead of rebuilding
+                key_map, type_map = schema_map_cache.get(name, ({"parameters": []}, {}))
 
                 mask = self._get_mask(curr, key_map, type_map)
+
                 if mask.shape[0] < self.vocab_size:
                     padded = np.zeros(self.vocab_size, dtype=bool)
                     padded[:mask.shape[0]] = mask
