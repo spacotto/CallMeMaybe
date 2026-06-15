@@ -81,7 +81,7 @@ def main() -> None:
         print(fmt.apply(
             'bold',
             'cyan',
-            f">>> Engine loaded in {init:.2f} seconds.\n\n"
+            f">>> Engine loaded in {init:.2f} seconds."
         ))
 
     except Exception as e:
@@ -108,18 +108,12 @@ def main() -> None:
             if isinstance(item, dict) and "prompt" in item
         ]
 
-        print(fmt.apply(None, 'gray', "-" * 70))
-        msg = f">>> Phase 1 & 2: Processing {len(prompts)} prompts..."
-        print(fmt.apply('bold', 'yellow', msg))
-        print(fmt.apply(None, 'gray', "-" * 70))
+        print(fmt.apply('bold', 'yellow',
+                        f">>> Processing {len(prompts)} prompts..."))
 
-        # FIX: Process sequentially (Batch Size 1) during verbose mode
-        # to prevent concurrent token logs from interleaving on the console.
+        # Tie batch size to verbose flag to allow sequential visualization
         BATCH_SIZE = 1 if args.verbose else 32
-        target_names: List[str] = []
-        json_results: List[str] = []
-
-        generation_start = time.time()
+        results = []
 
         for batch_idx, batch_prompts in enumerate(chunk_data(prompts, BATCH_SIZE)):
             if args.verbose and BATCH_SIZE != 1:
@@ -127,7 +121,6 @@ def main() -> None:
 
             # Phase 1: Classification
             batch_targets = classifier.classify_batch(batch_prompts, functions_schema)
-            target_names.extend(batch_targets)
 
             # Calculate limits dynamically per prompt
             batch_limits = []
@@ -140,62 +133,55 @@ def main() -> None:
                     limit += 50
                 batch_limits.append(limit)
 
-            if BATCH_SIZE == 1:
-                abs_idx = len(json_results) + 1
+            # Print prompt header before generation
+            if args.verbose and BATCH_SIZE == 1:
+                abs_idx = len(results) + 1
                 Visualizer.print_prompt_start(abs_idx, len(prompts), batch_prompts[0])
 
             # Phase 2: Extraction
+            t0 = time.time()
             batch_results = schema_extractor.extract_batch(
                 prompts=batch_prompts,
                 function_names=batch_targets,
                 functions=functions_schema,
                 max_new_tokens_list=batch_limits,
-                verbose=True
+                verbose=args.verbose
             )
-            json_results.extend(batch_results)
+            batch_time = time.time() - t0
 
-        avg_gen_time = (time.time() - generation_start) / max(1, len(prompts))
-
-    except Exception as e:
-        error(f"Pipeline Generation failed: {e}")
-        return
-
-    # --- PHASE 3: POST-PROCESSING ---
-    results = []
-    try:
-        print(fmt.apply('bold', 'yellow', ">>> Phase 3: Validating..."))
-        print(fmt.apply(None, 'gray', "-" * 70))
-
-        for idx, (prompt, target_name, json_result_str) in enumerate(
-            zip(prompts, target_names, json_results)
-        ):
-            try:
-                # Removed Visualizer.print_prompt_start here to avoid double-printing
-
-                final_item = PostProcessor.process_result(
-                    prompt,
-                    target_name,
-                    json_result_str,
-                    functions_schema
-                )
-                results.append(final_item)
-
-                if args.verbose:
-                    Visualizer.print_generation_time(
-                        avg_gen_time, is_valid=True
+            # Phase 3: Immediate Post-Processing & Validation
+            for idx_in_batch, (prompt, target_name, json_result_str) in enumerate(zip(batch_prompts, batch_targets, batch_results)):
+                try:
+                    final_item = PostProcessor.process_result(
+                        prompt,
+                        target_name,
+                        json_result_str,
+                        functions_schema
                     )
-                    Visualizer.print_json_render(final_item)
+                    results.append(final_item)
 
-            except Exception as item_e:
-                error(f"Critical Parsing Error on item {idx+1}: {item_e}")
-                results.append({
-                    "prompt": prompt,
-                    "name": target_name,
-                    "parameters": {}
-                })
+                    # Print JSON render immediately after the generation line
+                    if args.verbose and BATCH_SIZE == 1:
+                        Visualizer.print_generation_time(batch_time, is_valid=True)
+                        Visualizer.print_json_render(final_item)
+
+                except Exception as item_e:
+                    error(f"Critical Parsing Error on item {len(results) + 1}: {item_e}")
+                    # Strictly compliant fallback
+                    fallback = {
+                        "prompt": prompt,
+                        "name": target_name,
+                        "parameters": {}
+                    }
+                    results.append(fallback)
+
+                    if args.verbose and BATCH_SIZE == 1:
+                        Visualizer.print_generation_time(batch_time, is_valid=False)
+                        Visualizer.print_json_render(fallback)
 
     except Exception as e:
-        error(f"Phase 3 (Post-Processing) failed: {e}")
+        error(f"Pipeline Execution failed: {e}")
+        return
 
     # --- OUTPUT SAVING ---
     try:
