@@ -15,13 +15,13 @@ MYPY     := $(UV) run mypy
 FLAKE8   := $(UV) run flake8
 EXCLUDE	 := --extend-exclude=$(VENV),$(TESTDIR),$(LLM),moulinette
 
-FUNC_DEF := data/input/functions_definition.json
-INPUT_F	 := data/input/function_calling_tests.json
-OUTPUT_F := data/output/function_calls.json
+FUNC_DEF ?= data/input/functions_definition.json
+INPUT_F	 ?= data/input/function_calling_tests.json
+OUTPUT_F ?= data/output/function_calls.json
 
 MODEL_A	:= HuggingFaceTB/SmolLM-135M-Instruct
 MODEL_B	:= Qwen/Qwen2.5-1.5B-Instruct
-ALT	:= $(MODEL_A)
+ALT	?= $(MODEL_A)
 HF_OFF	:= HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 
 # ------------------------------------------------------------
@@ -64,7 +64,7 @@ help:
 	@$(ECHO) " $(BLUE)MANDATORY RULES$(RESET)"
 	@$(ECHO) ""
 	@$(ECHO) "     $(BLUE)install$(RESET)      Install dependencies in venv"
-	@$(ECHO) "     $(BLUE)run$(RESET)          Run the main script with MAP=<map_path>"
+	@$(ECHO) "     $(BLUE)run$(RESET)          Run the pipeline with preset values"
 	@$(ECHO) "     $(BLUE)debug$(RESET)        Run the main script with pdb"
 	@$(ECHO) "     $(BLUE)clean$(RESET)        Remove temporary files and caches"
 	@$(ECHO) "     $(BLUE)lint$(RESET)         Execute flake8 + mypy (standard flags)"
@@ -73,9 +73,10 @@ help:
 	@$(ECHO) " $(CYAN)BONUS RULES$(RESET)"
 	@$(ECHO) ""
 	@$(ECHO) "     $(CYAN)campus-init$(RESET)  Set up environment in /tmp"
-	@$(ECHO) "     $(CYAN)clean-venv$(RESET)   Remove the venv"
-	@$(ECHO) "     $(CYAN)test$(RESET)         Run test suite"
 	@$(ECHO) "     $(CYAN)visual$(RESET)       Run generation with live state-machine visualization"
+	@$(ECHO) "     $(CYAN)test$(RESET)         Run test suite"
+	@$(ECHO) "     $(CYAN)run-alt$(RESET)      Run the pipeline with another model"
+	@$(ECHO) "     $(CYAN)clean-venv$(RESET)   Remove the venv"
 	@$(ECHO) ""
 
 # ------------------------------------------------------------
