@@ -136,8 +136,8 @@ class FunctionClassifier:
 
                 if '"' in new_char:
                     is_finished[orig_i] = True
-                    final_part = new_char.split('"')[0]
-                    extracted_names[orig_i] = current_prefixes[orig_i] + final_part
+                    end = new_char.split('"')[0]
+                    extracted_names[orig_i] = current_prefixes[orig_i] + end
                 else:
                     current_prefixes[orig_i] += new_char
 
