@@ -81,8 +81,13 @@ def main() -> None:
     start_init = time.time()
 
     # --- MODEL INITIALIZATION ---
+
+    # Allow overriding the model via environment variable
+    model_name = os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-0.6B")
+
     try:
-        classifier = FunctionClassifier(model_name="Qwen/Qwen3-0.6B")
+        # Inject the variable model name
+        classifier = FunctionClassifier(model_name=model_name)
         schema_extractor = SchemaExtractor(classifier_instance=classifier)
 
         init = time.time() - start_init

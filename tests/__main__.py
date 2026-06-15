@@ -1,4 +1,5 @@
 import os
+import pytest
 import subprocess
 from src.utils import Formatter as clr
 from src.utils import error as err
@@ -66,7 +67,7 @@ class CallMeMaybeTester:
             2: ['Test output validation', self._test_output_validation],
             3: ['Test standard prompt batch', self._test_standard_batch],
             4: ['Test edge cases prompt batch', self._test_edge_cases],
-            5: ['Test nested parameters prompt batch', self._test_nested_parameters]
+            5: ['Test nested parameters prompt batch', self._test_nested_parameters],
         }
 
         print(clr.apply('bold', 'white', f'  {"n.":<3}Description'))
