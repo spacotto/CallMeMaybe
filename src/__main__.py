@@ -47,20 +47,26 @@ def main() -> None:
         cli_parser = argparse.ArgumentParser(
             description="Constrained Decoding LLM Engine"
         )
+        # 1. Make functions_definition REQUIRED (no default value)
         cli_parser.add_argument(
             "--functions_definition",
             type=str,
-            default="data/input/functions_definition.json"
+            required=True,
+            help="Path to the functions definition JSON file (Required)"
         )
+        # 2. Keep input OPTIONAL with default path
         cli_parser.add_argument(
             "--input",
             type=str,
-            default="data/input/function_calling_tests.json"
+            default="data/input/function_calling_tests.json",
+            help="Path to the input prompts JSON file (Optional)"
         )
+        # 3. Keep output OPTIONAL with default path
         cli_parser.add_argument(
             "--output",
             type=str,
-            default="data/output/function_calling_results.json"
+            default="data/output/function_calling_results.json",
+            help="Path to save the generated JSON results (Optional)"
         )
         cli_parser.add_argument("--verbose", action="store_true")
         args = cli_parser.parse_args()
