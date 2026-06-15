@@ -6,6 +6,32 @@ This project introduces **function calling** in **Large Language Models (LLMs)**
 
 ## Instructions
 
+The project uses uv for fast dependency management and a Makefile for execution.
+
+Standard initialisation: 
+
+```bash
+make install
+```
+
+Run Pipeline: 
+
+```bash
+make run
+```
+
+Visualise the engine (runs batch size 1 with live state-machine visualisation):
+
+```bash
+make visual
+```
+
+Run the pipeline with the alternative model:
+
+```bash
+make run-alt ALT="HuggingFaceTB/SmolLM2-360M-Instruct"
+```
+
 ## Algorithm explanation
 
 ## Design decisions
