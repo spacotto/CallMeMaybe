@@ -1,6 +1,4 @@
 import numpy as np
-import re
-import json
 from typing import List, Dict, Any, Set, Tuple
 
 from src.engine.classifier import FunctionClassifier
@@ -12,7 +10,9 @@ class JSONParserState:
 
     def __init__(self) -> None:
         self.state = "EXPECT_KEY"
-        self.stack: List[Dict[str, Any]] = [{"key": "parameters", "completed": set()}]
+        self.stack: List[Dict[str, Any]] = [
+            {"key": "parameters", "completed": set()}
+        ]
         self.escape = False
         self.current_key = ""
         self.pending_key = ""
@@ -62,7 +62,10 @@ class JSONParserState:
                     self.state = "IN_NUMBER_VALUE"
                 elif char == '{':
                     self.state = "EXPECT_KEY"
-                    self.stack.append({"key": self.pending_key, "completed": set()})
+                    self.stack.append({
+                        "key": self.pending_key,
+                        "completed": set()
+                    })
                 elif char in 'tfn':
                     self.state = "IN_LITERAL_VALUE"
 
@@ -152,7 +155,9 @@ class SchemaExtractor:
 
         self.key_mask_cache: Dict[str, np.ndarray] = {}
 
-        self.global_schema_cache: Dict[str, Tuple[Dict[str, List[str]], Dict[str, str]]] = {}
+        self.global_schema_cache: Dict[
+            str, Tuple[Dict[str, List[str]], Dict[str, str]]
+        ] = {}
 
     def _build_schema_maps(
         self, properties: Dict[str, Any]
@@ -201,13 +206,15 @@ class SchemaExtractor:
             current_prefixes.append(start_str)
 
         is_finished = [False] * len(prompts)
-        absolute_max_steps = max(max_new_tokens_list) if max_new_tokens_list else 180
+        absolute_max_steps = (
+            max(max_new_tokens_list) if max_new_tokens_list else 180
+        )
 
         for func in functions:
             name = func["name"]
             if name not in self.global_schema_cache:
-                params = func.get("parameters", {})
-                self.global_schema_cache[name] = self._build_schema_maps(params)
+                ps = func.get("parameters", {})
+                self.global_schema_cache[name] = self._build_schema_maps(ps)
 
         for step in range(absolute_max_steps):
             if all(is_finished):
@@ -238,9 +245,13 @@ class SchemaExtractor:
             for idx, orig_i in enumerate(active_idx):
                 name = function_names[orig_i]
 
-                key_map, type_map = self.global_schema_cache.get(name, ({"parameters": []}, {}))
+                key_map, type_map = self.global_schema_cache.get(
+                    name, ({"parameters": []}, {})
+                )
 
-                mask = self._get_mask(parser_states[orig_i], key_map, type_map)
+                mask = self._get_mask(
+                    parser_states[orig_i], key_map, type_map
+                )
 
                 if mask.shape[0] < self.vocab_size:
                     padded = np.zeros(self.vocab_size, dtype=bool)
@@ -269,12 +280,17 @@ class SchemaExtractor:
 
                 parser_states[orig_i].update(new_char)
 
-                # FIX: Tie visualization to the verbose flag, tracking the active token
                 if verbose:
                     allowed_count = int(np.sum(mask_matrix[idx]))
-                    dummy_set = set(range(allowed_count))
+                    # Cast to Set[str] to satisfy Mypy
+                    dummy_set: Set[str] = set(
+                        str(x) for x in range(allowed_count)
+                    )
                     Visualizer.print_status(
-                        step, new_char, dummy_set, parser_states[orig_i].state
+                        step,
+                        new_char,
+                        dummy_set,
+                        parser_states[orig_i].state
                     )
 
                 end_token = self.tokenizer.token_to_id.get("<|im_end|>", -1)
@@ -299,7 +315,9 @@ class SchemaExtractor:
 
             parent_key = stack[-1]["key"] if stack else ""
             completed: Set[str] = stack[-1]["completed"] if stack else set()
-            valid = [k for k in key_map.get(parent_key, []) if k not in completed]
+            valid = [
+                k for k in key_map.get(parent_key, []) if k not in completed
+            ]
 
             for t_id in self.struct_mask_indices:
                 s_strip = self.stripped_vocab[t_id]
@@ -314,10 +332,19 @@ class SchemaExtractor:
                         if not s_content:
                             struct_allowed[t_id] = True
                         else:
-                            s_val = s_content[:-1] if s_content.endswith('"') else s_content
+                            if s_content.endswith('"'):
+                                s_val = s_content[:-1]
+                            else:
+                                s_val = s_content
+
                             allowed = any(v.startswith(s_val) for v in valid)
-                            closure = any(s_val == v for v in valid) and s_content.endswith('"')
-                            if allowed and (not s_content.endswith('"') or closure):
+                            closure = (
+                                any(s_val == v for v in valid)
+                                and s_content.endswith('"')
+                            )
+                            if allowed and (
+                                not s_content.endswith('"') or closure
+                            ):
                                 struct_allowed[t_id] = True
 
                 elif state == "EXPECT_COLON":
@@ -328,9 +355,11 @@ class SchemaExtractor:
                     if not s_strip:
                         struct_allowed[t_id] = True
                     elif s_strip.startswith(','):
-                        if valid: struct_allowed[t_id] = True
+                        if valid:
+                            struct_allowed[t_id] = True
                     elif s_strip.startswith('}'):
-                        if not valid: struct_allowed[t_id] = True
+                        if not valid:
+                            struct_allowed[t_id] = True
 
                 elif state == "EXPECT_VALUE":
                     if not s_strip or s_strip[0] in '"0123456789tfn{[':
@@ -356,8 +385,13 @@ class SchemaExtractor:
 
             if state == "IN_KEY":
                 parent = stack[-1]["key"] if stack else ""
-                completed_keys: Set[str] = stack[-1]["completed"] if stack else set()
-                valid = [k for k in key_map.get(parent, []) if k not in completed_keys]
+                completed_keys: Set[str] = (
+                    stack[-1]["completed"] if stack else set()
+                )
+                valid = [
+                    k for k in key_map.get(parent, [])
+                    if k not in completed_keys
+                ]
 
                 prefix = parser_state.current_key
                 cache_k = f"{','.join(sorted(valid))}|{prefix}"
@@ -368,10 +402,17 @@ class SchemaExtractor:
                     for t_id in self.wildcard_safe_indices:
                         s = self.clean_vocab[t_id]
                         if s:
-                            s_val = s[:-1] if s.endswith('"') else s
+                            if s.endswith('"'):
+                                s_val = s[:-1]
+                            else:
+                                s_val = s
+
                             prop = prefix + s_val
                             allowed = any(v.startswith(prop) for v in valid)
-                            closure = any(prop == v for v in valid) and s.endswith('"')
+                            closure = (
+                                any(prop == v for v in valid)
+                                and s.endswith('"')
+                            )
                             if allowed and (not s.endswith('"') or closure):
                                 v_mask[t_id] = True
                     self.key_mask_cache[cache_k] = v_mask
