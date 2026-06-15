@@ -32,11 +32,14 @@ class SchemaParser(BaseModel):
                 try:
                     # Validate the structure using Pydantic
                     validated_item = FunctionDefinition(**item)
-                    # Dump back to dictionary format for the rest of the pipeline to use
-                    validated_schema.append(validated_item.model_dump(exclude_none=True))
+                    # Dump back to dict format for the rest of the pipeline
+                    validated_schema.append(
+                            validated_item.model_dump(exclude_none=True)
+                        )
                 except ValidationError as ve:
                     func_name = item.get("name", "Unknown Function")
-                    error(f"Pydantic Validation Error in schema '{func_name}': {ve}")
+                    error("Pydantic Validation Error in schema "
+                          f"'{func_name}': {ve}")
                     # Skip malformed functions to prevent downstream crashes
                     continue
 
