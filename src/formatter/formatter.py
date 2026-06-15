@@ -126,7 +126,8 @@ class Formatter:
         parts = [f"<|im_start|>system\n{system_instruction}<|im_end|>\n"]
 
         for ex in examples:
-            parts.append(f"<|im_start|>user\n{ex.get('prompt', '')}<|im_end|>\n")
+            parts.append("<|im_start|>user\n"
+                         f"{ex.get('prompt', '')}<|im_end|>\n")
             expected_output = {
                 "name": target_name,
                 "parameters": ex.get('parameters', {})
