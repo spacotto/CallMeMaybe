@@ -6,13 +6,15 @@ from src.utils import Formatter as clr
 from src.utils import error as err
 
 class EdgeCaseTester:
-    def __init__(self) -> None:
-        self.module_dir = os.path.dirname(os.path.abspath(__file__))
-        self.root_dir = os.path.dirname(os.path.dirname(self.module_dir))
+    def __init__(self, test_input_dir: str, test_output_dir: str) -> None:
+        self.test_input_dir = test_input_dir
+        self.test_output_dir = test_output_dir
+        self.root_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
         # Isolate edge case tests so they don't overwrite standard batch data
-        self.test_input_path = os.path.join(self.module_dir, "edge_case_inputs.json")
-        self.test_output_path = os.path.join(self.module_dir, "edge_case_results.json")
+        # Now pointing to the centralized data/input/tests and data/output/tests directories
+        self.test_input_path = os.path.join(self.test_input_dir, "edge_case_inputs.json")
+        self.test_output_path = os.path.join(self.test_output_dir, "edge_case_results.json")
         self.schema_file = os.path.join(self.root_dir, "data", "input", "functions_definition.json")
 
         # The adversarial prompt pool
@@ -118,6 +120,8 @@ class EdgeCaseTester:
 
             if len(data) != expected_count:
                 err(f"  [WARNING] Expected {expected_count} results, but generated {len(data)}.")
+            else:
+                print(clr.apply('bold', 'lime', f"\n  [SUCCESS] Successfully extracted {len(data)} edge cases.\n"))
 
         except json.JSONDecodeError as e:
             err(f"  [FAILED] Engine generated invalid JSON under edge case stress: {e}")

@@ -4,7 +4,7 @@ import pytest
 
 # Paths
 MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-INVALID_DATA_DIR = os.path.join(MODULE_DIR, "invalid_data")
+INVALID_DATA_DIR = os.environ.get("INPUT_VALIDATOR_MOCK_DIR", os.path.join(MODULE_DIR, "invalid_data"))
 MAIN_SCRIPT = ["uv", "run", "python", "-m", "src"]
 
 def run_engine_with_schema(schema_filename: str) -> subprocess.CompletedProcess:

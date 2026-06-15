@@ -4,7 +4,7 @@ import pytest
 
 # Mock Paths
 MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
-MOCK_DATA_DIR = os.path.join(MODULE_DIR, "mock_data")
+MOCK_DATA_DIR = os.environ.get("OUTPUT_VALIDATOR_MOCK_DIR", os.path.join(MODULE_DIR, "mock_data"))
 MOCK_SCHEMA_PATH = os.path.join(MOCK_DATA_DIR, "mock_schema.json")
 
 # Real Paths
@@ -106,4 +106,4 @@ def test_real_output_compliance():
             all_errors.append(f"Item {index} [{func_name}]: {e}")
 
     # If all_errors is not empty, the assert will fail and print out the exact violations
-    assert not all_errors, f"Moulinette Validation Failed for Real Output:\n" + "\n".join(all_errors)
+    assert not all_errors, f"Validation Failed for Real Output:\n" + "\n".join(all_errors)

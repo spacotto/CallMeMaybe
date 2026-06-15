@@ -6,14 +6,15 @@ from src.utils import error as err
 from src.utils import warning as warn
 
 class NestedParametersTester:
-    def __init__(self) -> None:
-        self.module_dir = os.path.dirname(os.path.abspath(__file__))
-        self.root_dir = os.path.dirname(os.path.dirname(self.module_dir))
+    def __init__(self, test_input_dir: str, test_output_dir: str) -> None:
+        # Accept the centralized directories from the Orchestrator
+        self.test_input_dir = test_input_dir
+        self.test_output_dir = test_output_dir
 
-        # Isolate nested tests from standard data
-        self.test_input_path = os.path.join(self.module_dir, "nested_inputs.json")
-        self.test_schema_path = os.path.join(self.module_dir, "nested_schema.json")
-        self.test_output_path = os.path.join(self.module_dir, "nested_results.json")
+        # Isolate nested tests into the centralized folders
+        self.test_input_path = os.path.join(self.test_input_dir, "nested_inputs.json")
+        self.test_schema_path = os.path.join(self.test_input_dir, "nested_schema.json")
+        self.test_output_path = os.path.join(self.test_output_dir, "nested_results.json")
 
         self.nested_schema = [
             {
@@ -103,6 +104,9 @@ class NestedParametersTester:
             if len(data) != len(self.nested_prompts):
                 warn(f"Expected {len(self.nested_prompts)} results, but generated {len(data)}.")
 
+            # Restored success print
+            print(clr.apply('bold', 'lime', f"\n  [SUCCESS] Successfully extracted {len(data)} nested structures.\n"))
+
         except json.JSONDecodeError as e:
             err(f"  [FAILED] Engine generated invalid JSON: {e}")
 
@@ -117,7 +121,6 @@ class NestedParametersTester:
 
     def run(self) -> None:
         """Main execution flow."""
-
         try:
             self._setup_files()
             if self._run_engine():

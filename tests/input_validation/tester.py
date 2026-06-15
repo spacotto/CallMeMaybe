@@ -6,16 +6,21 @@ from src.utils import Formatter as clr
 from src.utils import error as err
 
 class InputValidationTester:
-    def __init__(self) -> None:
-        # Resolve paths relative to this module
-        self.module_dir = os.path.dirname(os.path.abspath(__file__))
-        self.invalid_data_dir = os.path.join(self.module_dir, "invalid_data")
-        self.test_file = os.path.join(self.module_dir, "test_inputs.py")
+    def __init__(self, test_input_dir: str, test_output_dir: str) -> None:
+        self.test_input_dir = test_input_dir
+        self.test_output_dir = test_output_dir
+        self.test_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "test_inputs.py")
+
+        # Route invalid mock data into the centralized data/input/tests/ folder
+        self.invalid_data_dir = os.path.join(self.test_input_dir, "input_validation_mock_data")
 
     def _setup_invalid_files(self) -> None:
         """Creates a temporary folder with malformed and invalid JSON files."""
         print(clr.apply('bold', 'yellow', ">>> Generating invalid test files..."))
         os.makedirs(self.invalid_data_dir, exist_ok=True)
+
+        # Export the path so pytest knows where to look for the generated files
+        os.environ["INPUT_VALIDATOR_MOCK_DIR"] = self.invalid_data_dir
 
         # 1. Malformed JSON (Syntax Error)
         with open(os.path.join(self.invalid_data_dir, "malformed.json"), "w", encoding="utf-8") as f:
@@ -36,12 +41,10 @@ class InputValidationTester:
 
     def run(self) -> None:
         """Main entry point called by the Orchestrator."""
-
         try:
             self._setup_invalid_files()
 
             # Programmatically run pytest on the specific test file
-            # -v: verbose, -q: quiet (adjust to your preference)
             exit_code = pytest.main(["-v", self.test_file])
 
             if exit_code == pytest.ExitCode.OK:
@@ -51,6 +54,7 @@ class InputValidationTester:
 
         except Exception as e:
             err(f"  Fatal error during input validation testing: {e}")
-        finally:
-            # Ensure cleanup happens even if tests crash
-            self._cleanup()
+
+#       finally:
+#           Ensure cleanup happens even if tests crash
+#           self._cleanup()

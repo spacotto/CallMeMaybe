@@ -1,8 +1,9 @@
+import os
 import subprocess
 from src.utils import Formatter as clr
 from src.utils import error as err
 
-# --- Import specialised tester class
+# --- Import specialised tester classes
 from tests.input_validation.tester import InputValidationTester
 from tests.output_validation.tester import OutputValidationTester
 from tests.standard_batch.tester import StandardBatchTester
@@ -11,12 +12,26 @@ from tests.nested_parameters.tester import NestedParametersTester
 
 
 class CallMeMaybeTester:
-    def __init__(self) -> None:
-        self.input_tester = InputValidationTester()
-        self.output_tester = OutputValidationTester()
-        self.standard_batch_tester = StandardBatchTester()
-        self.edge_case_tester = EdgeCaseTester()
-        self.nested_tester = NestedParametersTester()
+    def __init__(self, dest_path: str = "data") -> None:
+        # 1. Define the central directory structure
+        self.dest_path = os.path.abspath(dest_path)
+        self.input_dir = os.path.join(self.dest_path, "input")
+        self.output_dir = os.path.join(self.dest_path, "output")
+
+        self.test_input_dir = os.path.join(self.input_dir, "tests")
+        self.test_output_dir = os.path.join(self.output_dir, "tests")
+
+        # 2. Automatically create the required directories if they don't exist
+        # exist_ok=True prevents crashes if the folders are already there
+        os.makedirs(self.test_input_dir, exist_ok=True)
+        os.makedirs(self.test_output_dir, exist_ok=True)
+
+        # 3. Pass the centralized paths into each tester
+        self.input_tester = InputValidationTester(self.test_input_dir, self.test_output_dir)
+        self.output_tester = OutputValidationTester(self.test_input_dir, self.test_output_dir)
+        self.standard_batch_tester = StandardBatchTester(self.test_input_dir, self.test_output_dir)
+        self.edge_case_tester = EdgeCaseTester(self.test_input_dir, self.test_output_dir)
+        self.nested_tester = NestedParametersTester(self.test_input_dir, self.test_output_dir)
 
     # --- Dispatch Methods ---
     def _test_input_handling(self) -> None:
@@ -39,7 +54,7 @@ class CallMeMaybeTester:
         print(clr.apply('bold', 'yellow', ">>> Running Nested Parameters Prompt Batch..."))
         self.nested_tester.run()
 
-    # --- Orchestrator core
+    # --- Orchestrator core ---
     def run(self) -> None:
         print('\n' + ' ' + '=' * 60)
         print(clr.apply('bold', 'white', '  Call Me Maybe: Test Suite'))
