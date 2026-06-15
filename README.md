@@ -32,6 +32,12 @@ Run the pipeline with the alternative model:
 make run-alt ALT="HuggingFaceTB/SmolLM2-360M-Instruct"
 ```
 
+Display the list of the available commands:
+
+```bash
+make help
+```
+
 ## Algorithm explanation
 
 ## Design decisions
