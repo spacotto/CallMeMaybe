@@ -12,5 +12,6 @@ class FunctionProperty(BaseModel):
 
     properties: Optional[Dict[str, Any]] = Field(
         default=None,
-        description="Nested properties dictionary if the type is designated as an object."
+        description=("Nested properties dictionary "
+                     "if the type is designated as an object.")
     )
