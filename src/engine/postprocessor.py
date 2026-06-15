@@ -3,6 +3,7 @@ from typing import List, Dict, Any
 from pydantic import ValidationError
 from src.parser.models.function_call_result import FunctionCallResult
 
+
 class PostProcessor:
     """Phase 3: Validates JSON structure, coerces types,
     and enforces Schema types using strict Pydantic rules.
@@ -44,7 +45,8 @@ class PostProcessor:
             if val is not None:
                 if expected_type == "number" or expected_type == "integer":
                     try:
-                        val = float(val) if expected_type == "number" else int(float(val))
+                        val = (float(val) if expected_type == "number"
+                               else int(float(val)))
                     except (ValueError, TypeError):
                         val = 0.0 if expected_type == "number" else 0
                 elif expected_type == "string":
