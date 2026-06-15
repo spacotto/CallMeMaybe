@@ -1,3 +1,16 @@
+"""
+Main orchestration module for the constrained decoding pipeline.
+
+This module serves as the entry point for the function calling engine.
+It manages the ingestion of CLI arguments, handles dynamic environment
+variable configurations (such as `LLM_MODEL_NAME`), and orchestrates
+the batching and execution phases of the constrained decoding process.
+"""
+
+# ----------------------------------------------------------------------------
+#  Imports
+# ----------------------------------------------------------------------------
+
 import time
 import argparse
 import json
@@ -15,10 +28,27 @@ from src.utils import error
 from src.visualizer import Visualizer
 
 
-def chunk_data(data: List[Any], chunk_size: int) -> Iterator[List[Any]]:
-    """Yields successive n-sized chunks from data to prevent OOM errors."""
-    for i in range(0, len(data), chunk_size):
-        yield data[i:i + chunk_size]
+# ----------------------------------------------------------------------------
+#  Helper functions
+# ----------------------------------------------------------------------------
+
+def chunk_data(data: List[str], batch_size: int) -> Iterator[List[str]]:
+    """
+    Yields successive batches from a list of strings.
+
+    This generator slices the input dataset into smaller, manageable chunks
+    to prevent Out-Of-Memory (OOM) errors during GPU inference and to
+    optimize throughput for the token masking engine.
+
+    Args:
+        data (List[str]): The complete list of prompts.
+        batch_size (int): The maximum number of elements per batch.
+
+    Yields:
+        Iterator[List[str]]: A single batched slice of the original data.
+    """
+    for i in range(0, len(data), batch_size):
+        yield data[i:i + batch_size]
 
 
 def calculate_prompt_limit(schema: Dict[str, Any]) -> int:
@@ -41,7 +71,26 @@ def calculate_prompt_limit(schema: Dict[str, Any]) -> int:
     return min(base_tokens, 150)
 
 
+# ----------------------------------------------------------------------------
+#  Entry point
+# ----------------------------------------------------------------------------
+
 def main() -> None:
+    """
+    Executes the primary constrained decoding pipeline.
+
+    This function initializes the argument parser to retrieve file paths
+    for the functions definition, input prompts, and output destinations.
+    It validates the presence of the `LLM_MODEL_NAME` environment
+    variable, initializes the `FunctionClassifier`, and drives the text
+    data through Phase 1 (Classification) and Phase 2 (Extraction),
+    ultimately serializing the valid JSON results.
+
+    Raises:
+        FileNotFoundError: If the input or definition files do not exist.
+        ValueError: If environment configs or schemas are malformed.
+    """
+
     # --- CLI SETUP ---
     try:
         cli_parser = argparse.ArgumentParser(
