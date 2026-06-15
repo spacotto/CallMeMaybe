@@ -13,7 +13,7 @@ class FunctionClassifier:
 
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         self.sdk = Small_LLM_Model(model_name=model_name)
-        self.tokenizer = Tokenizer()
+        self.tokenizer = Tokenizer(model_name=model_name)
 
         if "qwen" in model_name.lower() or "smol" in model_name.lower():
             self.formatter = Formatter(format_type=ModelFormat.CHATML)

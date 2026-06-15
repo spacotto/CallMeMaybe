@@ -19,6 +19,9 @@ FUNC_DEF := data/input/functions_definition.json
 INPUT_F	 := data/input/function_calling_tests.json
 OUTPUT_F := data/output/function_calls.json
 
+MODEL_A	:= HuggingFaceTB/SmolLM-135M-Instruct
+MODEL_B	:= Qwen/Qwen2.5-1.5B-Instruct
+ALT	:= $(MODEL_A)
 HF_OFF	:= HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 
 # ------------------------------------------------------------
@@ -50,7 +53,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help test campus-init clean-venv visual
+       	help test campus-init clean-venv visual run-alt
 
 # ------------------------------------------------------------
 #  Default target
@@ -198,3 +201,25 @@ visual:
 	--input $(INPUT_F) \
 	--output $(OUTPUT_F) \
 	--verbose
+
+# ------------------------------------------------------------
+#  run-alt — execute the main script and clean up model weights
+# ------------------------------------------------------------
+
+run-alt:
+	@$(ECHO) "$(YELLOW)>>> Running engine with model: $(ALT)...$(RESET)"
+	@export HF_HOME="/tmp/$(USER)_hf_alt_cache"; \
+	LLM_MODEL_NAME="$(ALT)" $(PYTHON) -m src \
+	--functions_definition $(FUNC_DEF) \
+	--input $(INPUT_F) \
+	--output $(OUTPUT_F) \
+	--verbose; \
+	EXIT_STATUS=$$?; \
+	$(ECHO) "$(YELLOW)>>> Cleaning up downloaded model weights from /tmp...$(RESET)"; \
+	$(RM) "/tmp/$(USER)_hf_alt_cache"; \
+	if [ $$EXIT_STATUS -eq 0 ]; then \
+		$(ECHO) "$(CYAN)>>> Alternative model test complete and cleaned.$(RESET)"; \
+	else \
+		$(ECHO) "$(RED)>>> Engine crashed, but tmp was still cleaned.$(RESET)"; \
+	fi; \
+	exit $$EXIT_STATUS

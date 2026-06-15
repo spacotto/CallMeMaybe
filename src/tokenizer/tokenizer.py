@@ -13,12 +13,13 @@ from llm_sdk import Small_LLM_Model  # type: ignore
 
 
 class Tokenizer:
-    def __init__(self) -> None:
+    def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         """
         Initializes the tokenizer by loading the vocabulary from the SDK
         and building the byte-level translation dictionaries.
         """
-        self.sdk = Small_LLM_Model()
+        # Pass the model_name to ensure the correct vocabulary is loaded!
+        self.sdk = Small_LLM_Model(model_name=model_name)
         vocab_path = self.vocab_path = self.sdk.get_path_to_vocab_file()
 
         with open(vocab_path, 'r', encoding='utf-8') as f:
