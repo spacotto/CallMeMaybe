@@ -12,87 +12,11 @@ This project introduces function calling in Large Language Models (LLMs) by buil
 
 ### Multi-Model Support & Resource Efficiency (SmolLM2-360M-Instruct)
 
-To fulfil the multi-model capability criteria and prove that the core system architecture is entirely decoupled from specific text abstractions, **SmolLM2-360M-Instruct** was chosen as the secondary evaluation model.
-
-**Tokenizer Architecture Synergy:** SmolLM2 utilises the **same Byte-Level BPE tokenizer architecture as the primary Qwen model**, relying on identical GPT-2 style byte-to-unicode character maps (such as the `Ġ` space artefact). This architectural alignment validates the custom, low-level `bytearray` buffering mechanism across distinct models without duplicating the binary processing layer.
-
-**Decoupled Prompt Verification:** While sharing a tokenizer footprint, SmolLM2 uses a uniquely tuned instruction configuration. Implementing this model serves as a direct proof of concept that the `Formatter` class successfully **abstracts away chat template strings**, presenting a clean, unified prefix stream to the core execution engine.
-
-**Extreme Hardware Optimisation:** Operating at an ultra-lightweight 360 million parameters, this model **minimises local RAM and CPU usage**, aligning perfectly with the constraint requirements for **fast, reproducible evaluation loops** on restricted campus environments.
-
----
-
-### [Tokenizer](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md): From-Scratch BBPE Engine
-
-Instead of relying on black-box abstractions like Hugging Face's `transformers` library, this project implements a custom **Byte-Level Byte-Pair Encoding (BBPE)** tokenizer from scratch. 
-
-**Greedy Lexing Algorithm:** For translating text to neural network integers (encoding), the system uses a longest-match greedy lexer. This avoids the heavy computational overhead of parsing a strict `merges.txt` ruleset while maintaining near-perfect structural alignment for constrained decoding tasks.
-
-**Low-Level Byte Buffering:** For decoding, the system bypasses Python's high-level string handlers. It maps BPE characters directly to their raw 0-255 integer values and loads them into a contiguous `bytearray`. This allows the underlying C-engine to safely reconstruct UTF-8 strings before rendering them to the console.
-
----
-
-### Formatter: Decoupled Multi-Model Context Preparation
-
-To **prevent the core decoding engine from becoming tightly coupled to specific language model sub-dialects**, the presentation layer is isolated entirely inside the `Formatter` class.
-
-**The Context Prefilling Strategy:** Causal language models are inherently trained to generate natural conversational preambles (e.g., *"Sure! Here is the structured data you requested:"*). This breaks deterministic text parsing. The formatter solves this by **hard-injecting the exact terminal sequence of the assistant token** (e.g., `<|im_start|>assistant\n`) **at the end of the prompt**. This pins the model's generation cursor precisely where the JSON syntax must begin, **eliminating conversational noise** at zero computational cost.
-
-**Agnostic Token Boundary Encapsulation:** By parameterising template engines via explicit formatting enums (`ModelFormat.CHATML` and `ModelFormat.INSTRUCT`), the system ensures that adding or testing an entirely different target model family requires **zero structural alterations to the execution loop or the tokenizer logic**.
-
----
-
-### Engine: Vectorised Tensor Execution
-
-**C-Compiled Logit Masking (NumPy):** While heavy machine learning frameworks like PyTorch and Hugging Face are strictly forbidden by the pedagogical constraints, the engine leverages `numpy` to handle the massive array operations required for real-time inference. By casting the ~150,000-token vocabulary logits into an `np.ndarray`, the state machine applies vectorised mathematical masking (crushing illegal token probabilities to `-np.inf`). This bypasses the extreme latency of native Python `for` loops, allowing the `np.argmax` evaluation to execute in milliseconds on standard CPU hardware.
-
-**Deterministic Constrained Decoding:** The most critical architectural decision in this project is the shift from *probabilistic generation* to *deterministic state-machine execution*. Instead of relying on fragile prompt engineering ("Please only output valid JSON! Make no mistakes!"), the engine physically intercepts the neural network's outputs (logits) during every step of the autoregressive loop. By dynamically toggling allowed character sets based on whether the generation cursor is inside or outside a string literal, the engine strips the LLM of its ability to hallucinate conversational padding or illegal structural characters, ensuring 100% compliance with downstream `json.loads()` parsers.
-
-### Parser: Strict Runtime Validation via Pydantic
-
-To fulfil the requirement for data validation, the `SchemaParser` and its underlying data structures are built entirely upon `pydantic.BaseModel`. 
-
-**Deterministic I/O Checking:** Rather than relying on `isinstance()` checks, the target `functions_definition.json` file is passed through a hierarchy of Pydantic models (`FunctionDefinition`, `FunctionParameters`, `FunctionProperty`). This mathematically guarantees that the schemas fed into the LLM prompt exactly match the required structural anatomy. Furthermore, the `SchemaParser` class itself validates its own initialisation variables, ensuring that missing files or invalid data types instantly trigger safe, graceful fallback errors rather than fatal pipeline crashes during evaluation.
-
 ## Performance analysis: Accuracy, Speed, and Reliability
-
-Achieving viable generation speeds on local hardware required optimisation. Standard Python **iteration over a 150,000+ token vocabulary causes latency**. By implementing **multi-layered caching** (precomputing cleaned vocabulary strings, compiling C-level regex patterns upon initialisation, and wrapping tokeniser operations in an LRU cache), the engine drastically reduces Python-level overhead. 
-
-Furthermore, shifting to purely **vectorised NumPy bitwise operations** for token masking eliminated millions of redundant string comparisons per generation step. This guarantees high-speed, reliable execution while maintaining 100% accuracy in the deterministic constrained decoding pipeline.
 
 ## Challenges faced
 
 ### The Multi-Byte Fragmentation Crash
-
->[!WARNING]
->**The Problem:** Language models do not respect character boundaries when outputting tokens. A complex multi-byte character (like a French accent `é` or a system emoji) is often split across two or three separate neural network outputs. Attempting to decode these tokens one by one causes fatal runtime crashes, as half a UTF-8 character is technically invalid memory.
-
->[!TIP]
->**The Solution:** By dropping the outputs into the intermediate `bytearray` buffer mentioned in the design decisions, the engine safely collects the fragmented binary data over multiple autoregressive loops, only casting to a readable string once the memory block is complete and valid.
-
-### Conversational Padding and Syntax Deviations
-
->[!WARNING]
->**The Problem:** Even with clear system instructions demanding raw JSON output, models frequently **loop into markdown blocks** (````json ... ````) or **append polite introductory text**. In production or automated environments, this leads to immediate downstream runtime crashes during `json.loads()` verification phases.
-
->[!TIP]
->**The Solution:** By combining the **prompt-prefilling strategy** with the **strict logit tracking of the constrained decoding loop**, the model is trapped inside a **structural state machine**. Because the prompt **ends exactly at the point of assistant execution** and the engine actively **blocks non-JSON tokens from being predicted**, the model is physically **prevented from outputting markdown wrappers or introductory prose**.
-
-### The Syntax Hallucination Problem
-
->[!WARNING]
->**The Problem:** Even highly fine-tuned models frequently suffer from minor syntax hallucinations; e.g., forgetting a closing quotation mark, omitting a comma, or trying to append an illegal trailing bracket. In standard applications, a single misplaced character causes fatal application crashes when the data is passed to a backend system.
-
->[!TIP]
->**The Solution:** The `ConstrainedDecoder` operates as a strict lexer natively integrated into the generation loop. If the model generates an open quote for a JSON key, the engine instantly restricts the allowed vocabulary for the next token to alphanumeric characters or a closing quote. By **crushing the probability of all other tokens to absolute zero**, it forces the model to mathematically guarantee perfect syntax, eliminating the need for messy regex extraction or retry loops.
-
-### The $O(N \times M)$ Execution Bottleneck
-
->[!WARNING]
->**The Problem:** Initial implementations of the decoding loop required traversing the entire **150,000+ vocabulary** against the Trie prefix tree and running native Python string comparisons for **every single token generated**. This resulted in an exponential $O(N \times M)$ complexity trap, causing generation times to exceed 1m per prompt.
-
->[!TIP]
->**The Solution:** The Python `for` loops were excluded from the validation step. **Vocabulary validation** rules were **precomputed into static NumPy boolean masks** during `__init__`. During generation, filtering valid tokens became a C-level bitwise operation (`mask &= self.struct_mask`). Combined with hoisted Trie pointer caching, this **reduced computational complexity** to near $O(1)$ per step.
 
 ## Testing strategy
 
