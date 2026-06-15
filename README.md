@@ -40,6 +40,14 @@ make help
 
 ## Algorithm explanation
 
+The constrained decoding pipeline operates in three phases to **guarantee deterministic outputs**:
+- **Phase 1, Zero-Shot Classification.** The engine uses an O(1) masking cache to force the model to evaluate the prompt and output a valid function name from the provided JSON schemas.
+- **Phase 2, Argument Extraction.** The engine dynamically bounds the generation length based on the target schema's shape. It traverses a SchemaTrie to mask out illegal structural characters (like misplaced brackets or quotes) while allowing the model to freely generate valid parameter values.
+- **Phase 3, Post-Processing & Validation.** The raw generated strings are parsed into Python dictionaries. This phase acts as a final safety net, catching any JSONDecodeErrors, filtering out structural anomalies, and forcing absolute schema compliance by injecting safe fallback objects if an edge case bypasses the extraction limits.
+
+>[!IMPORTANT]
+>For more detailed documentation about the O(1) masking matrix, prefix caching, and the SchemaTrie implementation, see the [**Engine Documentation**](https://github.com/spacotto/CallMeMaybe/blob/main/src/engine/README.md).
+
 ## Design decisions
 
 ### Multi-Model Support & Resource Efficiency (SmolLM2-360M-Instruct)
