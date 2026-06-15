@@ -50,7 +50,7 @@ RM	:= /bin/rm -rf
 # ============================================================
 
 .PHONY: install run debug clean lint lint-strict \
-       	help test campus-init clean-venv visual nested public private
+       	help test campus-init clean-venv visual
 
 # ------------------------------------------------------------
 #  Default target
@@ -71,7 +71,7 @@ help:
 	@$(ECHO) ""
 	@$(ECHO) "     $(CYAN)campus-init$(RESET)  Set up environment in /tmp"
 	@$(ECHO) "     $(CYAN)clean-venv$(RESET)   Remove the venv"
-	@$(ECHO) "     $(CYAN)test$(RESET)         Run pytest test set"
+	@$(ECHO) "     $(CYAN)test$(RESET)         Run test suite"
 	@$(ECHO) "     $(CYAN)visual$(RESET)       Run generation with live state-machine visualization"
 	@$(ECHO) ""
 
@@ -168,13 +168,13 @@ campus-init:
 	@$(ECHO) "$(YELLOW)>>> Routing uv cache to /tmp...$(RESET)"
 	@export UV_CACHE_DIR="/tmp/$(USER)_uv_cache"; \
 	$(ECHO) "$(YELLOW)>>> Creating venv in /tmp...$(RESET)" ; \
-	$(UV) venv "/tmp/$(USER)_callmemaybe_venv" ; \
+	$(UV) venv "/tmp/$(USER)_callmemaybe_$(VENV)" ; \
 	$(ECHO) "$(YELLOW)>>> Linking $(VENV)...$(RESET)" ; \
 	$(RM) $(VENV) ; \
-	ln -s "/tmp/$(USER)_callmemaybe_venv" $(VENV) ; \
+	ln -s "/tmp/$(USER)_callmemaybe_$(VENV)" $(VENV) ; \
 	$(ECHO) "$(YELLOW)>>> Syncing dependencies...$(RESET)" ; \
 	$(UV) sync
-	@$(ECHO) "$(CYAN)>>> Campus environment ready!$(RESET)"
+	@$(ECHO) "$(CYAN)>>> Campus environment ready! You can access it via: source $(VENV)/bin/activate$(RESET)"
 
 # ------------------------------------------------------------
 #  clean-venv — remove virtual environment
@@ -183,7 +183,7 @@ campus-init:
 clean-venv:
 	@$(ECHO) "$(YELLOW)>>> Cleaning venv and campus tmp files$(RESET)"
 	@$(RM) $(VENV)
-	@$(RM) "/tmp/$(USER)_callmemaybe_venv"
+	@$(RM) "/tmp/$(USER)_callmemaybe_$(VENV)"
 	@$(RM) "/tmp/$(USER)_uv_cache"
 	@$(ECHO) "$(CYAN)>>> Done.$(RESET)"
 
@@ -198,37 +198,3 @@ visual:
 	--input $(INPUT_F) \
 	--output $(OUTPUT_F) \
 	--verbose
-
-# ------------------------------------------------------------
-#  nested 
-# ------------------------------------------------------------
-
-nested:
-	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
-	@$(PYTHON) -m src \
-	--functions_definition data/nested_input/nested_functions_definition.json \
-	--input data/nested_input/nested_function_calling_tests.json \
-	--output data/output/function_calls_nested.json \
-	--verbose
-
-# ------------------------------------------------------------
-#  private 
-# ------------------------------------------------------------
-
-private:
-	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
-	@$(PYTHON) -m src \
-	--functions_definition moulinette/data/input/functions_definition.json \
-	--input moulinette/data/input/function_calling_tests.json \
-	--output data/output/function_calls_private.json 
-
-# ------------------------------------------------------------
-#  public 
-# ------------------------------------------------------------
-
-public:
-	@$(ECHO) "$(YELLOW)>>> Running the function calling tool with generation process visuals...$(RESET)"
-	@$(PYTHON) -m src \
-	--functions_definition data/input/functions_definition.json \
-	--input data/input/function_calling_tests.json \
-	--output data/output/function_calls_public.json 
