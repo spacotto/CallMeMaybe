@@ -36,9 +36,13 @@ def chunk_data(data: List[str], batch_size: int) -> Iterator[List[str]]:
     """
     Yields successive batches from a list of strings.
 
-    This generator slices the input dataset into smaller, manageable chunks
-    to prevent Out-Of-Memory (OOM) errors during GPU inference and to
-    optimize throughput for the token masking engine.
+    # ------------------------------------------------------------------
+    # [BATCHING MECHANISM]: Dynamic Memory Protection
+    # This generator safely slices the dataset. Pushing 10,000 prompts
+    # into the model simultaneously will cause a fatal CUDA Out-Of-Memory
+    # (OOM) exception. Batching bounds the VRAM footprint to a safe,
+    # constant size regardless of the total input file length.
+    # ------------------------------------------------------------------
 
     Args:
         data (List[str]): The complete list of prompts.
@@ -54,6 +58,16 @@ def chunk_data(data: List[str], batch_size: int) -> Iterator[List[str]]:
 def calculate_prompt_limit(schema: Dict[str, Any]) -> int:
     """
     Calculates a safe token limit dynamically based on the schema's shape.
+
+    By analyzing the parameter count and types (specifically looking for
+    unbounded strings), the engine assigns a strict cut-off point to
+    prevent the LLM from hallucinating endless loops.
+
+    Args:
+        schema (Dict[str, Any]): The target function's parameter schema.
+
+    Returns:
+        int: The maximum number of tokens allowed for this specific prompt.
     """
     params = schema.get("parameters", {})
     if not params:
@@ -79,38 +93,32 @@ def main() -> None:
     """
     Executes the primary constrained decoding pipeline.
 
-    This function initializes the argument parser to retrieve file paths
-    for the functions definition, input prompts, and output destinations.
-    It validates the presence of the `LLM_MODEL_NAME` environment
-    variable, initializes the `FunctionClassifier`, and drives the text
-    data through Phase 1 (Classification) and Phase 2 (Extraction),
-    ultimately serializing the valid JSON results.
-
-    Raises:
-        FileNotFoundError: If the input or definition files do not exist.
-        ValueError: If environment configs or schemas are malformed.
+    Initializes the argument parser to retrieve file paths, validates
+    the environment variables, initializes the engine phases, and drives
+    the text data through Classification, Extraction, and Validation.
     """
 
-    # --- CLI SETUP ---
+    # ----------------------------------------------------------------------
+    # [ERROR CATCHING]: CLI Initialization
+    # Prevents malformed arguments from causing an unhandled crash before
+    # the engine even begins to spin up.
+    # ----------------------------------------------------------------------
     try:
         cli_parser = argparse.ArgumentParser(
             description="Constrained Decoding LLM Engine"
         )
-        # 1. Make functions_definition REQUIRED (no default value)
         cli_parser.add_argument(
             "--functions_definition",
             type=str,
             required=True,
             help="Path to the functions definition JSON file (Required)"
         )
-        # 2. Keep input OPTIONAL with default path
         cli_parser.add_argument(
             "--input",
             type=str,
             default="data/input/function_calling_tests.json",
             help="Path to the input prompts JSON file (Optional)"
         )
-        # 3. Keep output OPTIONAL with default path
         cli_parser.add_argument(
             "--output",
             type=str,
@@ -130,12 +138,14 @@ def main() -> None:
     start_init = time.time()
 
     # --- MODEL INITIALIZATION ---
-
-    # Allow overriding the model via environment variable
     model_name = os.getenv("LLM_MODEL_NAME", "Qwen/Qwen3-0.6B")
 
+    # ----------------------------------------------------------------------
+    # [ERROR CATCHING]: Model Loading
+    # Catches missing weights, incorrect paths, or architecture mismatches
+    # gracefully rather than throwing raw device-side tracebacks.
+    # ----------------------------------------------------------------------
     try:
-        # Inject the variable model name
         classifier = FunctionClassifier(model_name=model_name)
         schema_extractor = SchemaExtractor(classifier_instance=classifier)
 
@@ -160,6 +170,12 @@ def main() -> None:
 
     start_pipeline = time.time()
 
+    # ----------------------------------------------------------------------
+    # [ERROR CATCHING]: Main Pipeline Execution Loop
+    # Wraps the entire generation sequence to ensure that if a fatal OOM
+    # or dataset corruption occurs, the pipeline fails cleanly without
+    # leaving orphaned processes.
+    # ----------------------------------------------------------------------
     try:
         with open(args.input, 'r', encoding='utf-8') as f:
             input_data = json.load(f)
@@ -173,10 +189,15 @@ def main() -> None:
         print(fmt.apply('bold', 'yellow',
                         f">>> Processing {len(prompts)} prompts..."))
 
-        # Tie batch size to verbose flag to allow sequential visualization
         BATCH_SIZE = 1 if args.verbose else 32
         results: List[Dict[str, Any]] = []
 
+        # ------------------------------------------------------------------
+        # [BATCHING MECHANISM]: Loop Orchestration
+        # Drives the sequential batches through Phase 1 and Phase 2. If
+        # verbose mode is on, it forces a batch size of 1 to allow the
+        # visualizer to cleanly print the state machine to the terminal.
+        # ------------------------------------------------------------------
         for batch_idx, batch_prompts in enumerate(
             chunk_data(prompts, BATCH_SIZE)
         ):
@@ -190,7 +211,6 @@ def main() -> None:
                 batch_prompts, functions_schema
             )
 
-            # Calculate limits dynamically per prompt
             batch_limits = []
             for target_name in batch_targets:
                 target_schema = next(
@@ -202,7 +222,6 @@ def main() -> None:
                     limit += 50
                 batch_limits.append(limit)
 
-            # Print prompt header before generation
             if args.verbose and BATCH_SIZE == 1:
                 abs_idx = len(results) + 1
                 Visualizer.print_prompt_start(
@@ -226,6 +245,13 @@ def main() -> None:
             ):
                 prompt, target_name, json_result_str = result_tuple
 
+                # ----------------------------------------------------------
+                # [ERROR CATCHING]: Item-Level Degradation
+                # If a specific prompt fails validation, we catch it here,
+                # log it, inject an empty safe parameter block, and ALLOW
+                # the batch to continue. One bad prompt will not ruin the
+                # entire JSON output file.
+                # ----------------------------------------------------------
                 try:
                     final_item = PostProcessor.process_result(
                         prompt,
@@ -235,7 +261,6 @@ def main() -> None:
                     )
                     results.append(final_item)
 
-                    # Print JSON render immediately after the generation line
                     if args.verbose and BATCH_SIZE == 1:
                         Visualizer.print_generation_time(
                             batch_time, is_valid=True
@@ -265,7 +290,12 @@ def main() -> None:
         error(f"Pipeline Execution failed: {e}")
         return
 
-    # --- OUTPUT SAVING ---
+    # ----------------------------------------------------------------------
+    # [ERROR CATCHING]: Output Saving
+    # Safely attempts to create missing directories and write the final
+    # JSON. Caught specifically to prevent losing hours of generation
+    # due to a simple permissions error.
+    # ----------------------------------------------------------------------
     try:
         os.makedirs(os.path.dirname(args.output), exist_ok=True)
         with open(args.output, 'w', encoding='utf-8') as output_file:
