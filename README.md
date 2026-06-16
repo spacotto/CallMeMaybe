@@ -72,6 +72,9 @@ By replacing traditional "generate-and-pray" post-processing with pre-generation
 - High Throughput: O(1) lookups using an inverted index (`string_to_ids`) prevent the engine from slowing down during matrix generation.
 - Memory Safety: Dynamic data chunking (`BATCH_SIZE`) prevents Out-Of-Memory exceptions during large processing runs.
 
+>[!CAUTION]
+>Originally, the project sets **5 minutes on standard hardware** as a reasonable speed. However, it has to be considered that the main **speed bottleneck** happens because the SDK's `get_logits_from_input_ids()` method only accepts a single 1D sequence at a time. Thus, the **neural network's forward pass** (the most computationally expensive part of the pipeline) had to be **executed sequentially inside a for loop**. Normally, in production frameworks like PyTorch or vLLM, you would pass a 2D tensor of shape `(batch_size, sequence_length)` directly into the model, allowing the GPU to compute the neural network layers for all 32 prompts simultaneously. This issue was countered as much as possible through **Hybrid Batching**: the bottleneck has been isolated by running the LLM predictions sequentially; then the results have been collected and stacked into a 2D NumPy array (`logits_matrix = np.stack(batch_logits)`); finally,  all of the complex bitwise masking arrays and CFG validations have been applied simultaneously across the entire batch using optimised, vectorised C-math. The constrained decoding math has been parallelised, even though the project is restricted from parallelising the model itself.
+
 ## Challenges faced
 
 * [System Entry & Architecture](https://github.com/spacotto/CallMeMaybe/blob/main/src/README.md#challenges-solved) (`src/__main__.py`)
