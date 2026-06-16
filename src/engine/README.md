@@ -86,3 +86,12 @@ The exact string of text the model has generated up to the current millisecond.
 ### O(1) Time Complexity
 
 An operation that takes a constant amount of time to execute, regardless of the size of the dataset (e.g., a direct dictionary lookup).
+
+
+### Batching (Micro)
+
+Stacking the raw logits of multiple parallel prompts into a single 2D NumPy array. This allows the CPU to apply token masks to the entire batch simultaneously using highly optimized, vectorised C-backend math.
+
+### Caching (Memoisation)
+
+Storing the results of heavy algorithmic computations (like evaluating 150,000 tokens against a JSON prefix). If the engine encounters the same string prefix again, it instantly retrieves the pre-computed boolean mask in O(1) time rather than recalculating it.
