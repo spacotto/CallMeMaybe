@@ -10,9 +10,10 @@ LLMs are fine-tuned using specific **conversational templates**. If a model was 
 
 ### Zero-Shot vs. Few-Shot Prompting
 
-| Zero-Shot | Few-Shot |
-| --- | --- |
-| Asking the model to perform a task with zero prior examples. This is computationally cheap but highly prone to logic errors in smaller models. | Injecting a small set of predefined examples into the prompt before asking the final question. This mathematically grounds the model's attention mechanism, showing it *how* to solve the problem rather than just telling it. |
+| Concept | Explanation |
+| :--- | :--- |
+| **Zero-Shot** | Asking the model to perform a task with zero prior examples. This is computationally cheap but highly prone to logic errors in smaller models. | 
+| **Few-Shot** | Injecting a small set of predefined examples into the prompt before asking the final question. This mathematically grounds the model's attention mechanism, showing it *how* to solve the problem rather than just telling it. |
 
 ### Context Window Management
 
