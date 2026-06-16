@@ -8,7 +8,7 @@ absolute adherence to the provided JSON schema.
 """
 
 import numpy as np
-from typing import List, Dict, Any, Set, Tuple
+from typing import List, Dict, Any, Set, Tuple, cast
 
 from src.engine.classifier import FunctionClassifier
 from src.visualizer import Visualizer
@@ -218,7 +218,7 @@ class SchemaExtractor:
         # global_schema_cache: Maps out the schema hierarchy once to avoid
         # recursive dictionary lookups during the generation loop.
         # ------------------------------------------------------------------
-        self.key_mask_cache: Dict[str, np.ndarray] = {}
+        self.key_mask_cache: Dict[str, Any] = {}
 
         self.global_schema_cache: Dict[
             str, Tuple[Dict[str, List[str]], Dict[str, str]]
@@ -332,7 +332,7 @@ class SchemaExtractor:
                 batch_logits.append(logits_np)
 
             logits_matrix = np.stack(batch_logits)
-            mask_matrix = np.ones(
+            mask_matrix: np.ndarray[Any, np.dtype[np.bool_]] = np.ones(
                 (len(active_idx), self.vocab_size), dtype=bool
             )
 
@@ -360,7 +360,8 @@ class SchemaExtractor:
                 padded_batch_mask[:, :mask_matrix.shape[1]] = mask_matrix
                 mask_matrix = padded_batch_mask
             elif mask_matrix.shape[1] > logits_matrix.shape[1]:
-                mask_matrix = mask_matrix[:, :logits_matrix.shape[1]]
+                mask_matrix = cast(np.ndarray[Any, np.dtype[np.bool_]],
+                                   mask_matrix[:, :logits_matrix.shape[1]])
 
             # Apply the mask: set invalid token logits to negative infinity
             logits_matrix[~mask_matrix] = -np.inf
@@ -399,7 +400,7 @@ class SchemaExtractor:
     def _get_mask(
         self, parser_state: JSONParserState, key_map: Dict[str, List[str]],
         type_map: Dict[str, str]
-    ) -> np.ndarray:
+    ) -> np.ndarray[Any, np.dtype[np.bool_]]:
         """
         Dynamically calculates the boolean token mask based on parser state.
 

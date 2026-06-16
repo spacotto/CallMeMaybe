@@ -9,7 +9,7 @@ the model cannot hallucinate invalid function names.
 
 import numpy as np
 import json
-from typing import List, Dict, Any
+from typing import List, Dict, Any, cast
 
 from src.tokenizer import Tokenizer
 from src.formatter import Formatter, ModelFormat
@@ -88,7 +88,9 @@ class FunctionClassifier:
         # batch reach the same prefix (e.g., '{"name": "fn_'), the mask is
         # retrieved instantly in O(1) time.
         # ------------------------------------------------------------------
-        self.prefix_mask_cache: Dict[str, np.ndarray] = {}
+        self.prefix_mask_cache: Dict[
+            str, np.ndarray[Any, np.dtype[np.bool_]]
+        ] = {}
 
     def classify_batch(
         self,
@@ -196,9 +198,13 @@ class FunctionClassifier:
                     (len(active_indices), logits_matrix.shape[1]), dtype=bool
                 )
                 padded[:, :mask_matrix.shape[1]] = mask_matrix
-                mask_matrix = padded
+                mask_matrix = cast(np.ndarray[Any, np.dtype[np.bool_]], padded)
+
             elif mask_matrix.shape[1] > logits_matrix.shape[1]:
-                mask_matrix = mask_matrix[:, :logits_matrix.shape[1]]
+                sliced_mask = mask_matrix[:, :logits_matrix.shape[1]]
+                mask_matrix = cast(np.ndarray[
+                        Any, np.dtype[np.bool_]
+                    ], sliced_mask)
 
             logits_matrix[~mask_matrix] = -np.inf
             next_token_ids = np.argmax(logits_matrix, axis=1)
