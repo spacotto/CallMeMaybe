@@ -92,3 +92,8 @@ uv run python -m src \
 - [What are Logits in LLMs?](https://docs.lm-kit.com/lm-kit-net/guides/glossary/logits.html)
 
 ### AI Usage
+
+* **Subject Research:** Exploring and understanding the underlying mechanics, such as autoregressive generation, Byte-Level BPE tokenisation, logits manipulation, etc.
+* **Debugging:** Assisting in diagnosing low-level errors, such as CUDA device-side assertions and byte-level BPE fragmentation issues.
+* **Code Quality & Strict Typing:** Identifying and resolving formatting constraints and type-hinting errors (Flake8, Mypy) to ensure the codebase met required standards.
+* **Documentation:** Drafting and structuring the README files and Python docstrings.
