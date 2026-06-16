@@ -83,6 +83,14 @@ uv run python -m src \
 ```
 
 ## Resources
+- [Fast, High-Fidelity LLM Decoding with Regex Constraints](https://huggingface.co/blog/vivien/llm-decoding-with-regex-constraints) 
+- [Function Calling](https://huggingface.co/docs/hugs/en/guides/function-calling)
 - [Hugging Face Transformers Documentation](https://huggingface.co/docs/transformers/index)
+- [Large Language Models (LLMs)](https://en.wikipedia.org/wiki/Large_language_model)
+- [Logit](https://en.wikipedia.org/wiki/Logit)
 - [Understanding Byte-Pair Encoding (BPE)](https://huggingface.co/learn/llm-course/chapter6/5)
+- [Understand tokens](https://learn.microsoft.com/en-us/dotnet/ai/conceptual/understanding-tokens)
 - [uv Package Manager](https://docs.astral.sh/uv/)
+- [What are Logits in LLMs?](https://docs.lm-kit.com/lm-kit-net/guides/glossary/logits.html)
+
+### AI Usage
