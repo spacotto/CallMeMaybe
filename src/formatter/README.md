@@ -1,5 +1,7 @@
 # Context Preparation: The Formatter
 
+The `formatter` module acts as the **bridge between the parsed schemas and the Large Language Model (LLM)**. LLMs do not inherently understand Python objects or raw user text; they require strictly formatted strings that use specific control tokens to differentiate between system instructions, user inputs, and expected outputs. This module dynamically constructs such prompt structures, injecting schemas and examples while managing memory and context window limits.
+
 ## Theoretical Concepts
 
 
