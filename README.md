@@ -54,7 +54,7 @@ The constrained decoding pipeline operates in three phases to **guarantee determ
 * [Data Ingestion](https://github.com/spacotto/CallMeMaybe/blob/main/src/parser/README.md#design-decisions) (`src/parser/`)
 * [Context Preparation](https://github.com/spacotto/CallMeMaybe/blob/main/src/formatter/README.md#design-decisions) (`src/formatter/`)
 * [Low-Level Mechanics](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md#design-decisions) (`src/tokenizer/`)
-* Constrained Decoding, Finalisation & Output (`src/engine/`)
+* [Constrained Decoding, Finalisation & Output](https://github.com/spacotto/CallMeMaybe/blob/main/src/engine/README.md#design-decisions) (`src/engine/`)
 * Visualisation (`src/visualizer/`)
 
 ## Performance analysis: Accuracy, Speed, and Reliability
@@ -70,7 +70,7 @@ By replacing traditional "generate-and-pray" post-processing with pre-generation
 * [Data Ingestion](https://github.com/spacotto/CallMeMaybe/blob/main/src/parser/README.md#challenges-solved) (`src/parser/`)
 * [Context Preparation](https://github.com/spacotto/CallMeMaybe/blob/main/src/formatter/README.md#challenges-solved) (`src/formatter/`)
 * [Low-Level Mechanics](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md#challenges-solved) (`src/tokenizer/`)
-* Constrained Decoding, Finalisation & Output (`src/engine/`)
+* [Constrained Decoding, Finalisation & Output](https://github.com/spacotto/CallMeMaybe/blob/main/src/engine/README.md#design-decisions) (`src/engine/`)
 * Visualisation (`src/visualizer/`)
 
 ## Testing strategy
