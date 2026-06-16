@@ -1,4 +1,11 @@
 """
+Custom Byte-Level BPE (BBPE) Tokenizer implementation.
+
+This module translates raw text into integer token IDs and vice versa.
+It leverages a byte-to-unicode mapping to ensure that any arbitrary
+string (including unknown characters) can be tokenized without
+Out-Of-Vocabulary (OOV) errors.
+
 Implementation Note (SDK Discrepancy):
 The project subject explicitly instructs the use of the method
 `get_path_to_vocabulary_json()` to retrieve the token mappings.
@@ -13,12 +20,31 @@ from llm_sdk import Small_LLM_Model  # type: ignore
 
 
 class Tokenizer:
+    """
+    Handles encoding and decoding of text using Byte-Level BPE.
+
+    By mapping all 256 individual bytes to specific unicode characters
+    before applying BPE tokenization, this class ensures complete
+    coverage of the UTF-8 spectrum, preventing crashes when the LLM
+    encounters unexpected characters or emojis.
+
+    Attributes:
+        sdk (Small_LLM_Model): The initialized language model SDK.
+        vocab_path (str): The absolute path to the vocabulary JSON.
+        token_to_id (Dict[str, int]): Maps BPE strings to integer IDs.
+        id_to_token (Dict[int, str]): Maps integer IDs to BPE strings.
+        byte_encoder (Dict[int, str]): Maps raw bytes to unicode chars.
+        byte_decoder (Dict[str, int]): Maps unicode chars to raw bytes.
+    """
     def __init__(self, model_name: str = "Qwen/Qwen3-0.6B") -> None:
         """
-        Initializes the tokenizer by loading the vocabulary from the SDK
-        and building the byte-level translation dictionaries.
+        Initializes the tokenizer and loads the vocabulary.
+
+        Args:
+            model_name (str): The identifier for the LLM weights and
+                vocabulary to load. Defaults to Qwen3-0.6B.
         """
-        # Pass the model_name to ensure the correct vocabulary is loaded!
+        # Pass the model_name to ensure the correct vocabulary is loaded
         self.sdk = Small_LLM_Model(model_name=model_name)
         vocab_path = self.vocab_path = self.sdk.get_path_to_vocab_file()
 
@@ -36,7 +62,18 @@ class Tokenizer:
 
     @staticmethod
     def _get_byte_to_unicode_mapping() -> Dict[int, str]:
-        """Generates the standard BPE byte-to-unicode mapping."""
+        """
+        Generates the standard BPE byte-to-unicode mapping.
+
+        This function shifts unprintable or control bytes into a
+        printable unicode range. This is the foundational trick of
+        BBPE that allows the model to treat raw bytes as standard
+        characters during tokenization.
+
+        Returns:
+            Dict[int, str]: A dictionary mapping integer bytes (0-255)
+            to their corresponding printable unicode characters.
+        """
         bs = (
             list(range(ord("!"), ord("~") + 1)) +
             list(range(ord("¡"), ord("¬") + 1)) +
@@ -55,7 +92,18 @@ class Tokenizer:
 
     def decode(self, token_ids: List[int]) -> str:
         """
-        Decodes a list of token IDs into a standard UTF-8 string.
+        Decodes a list of token IDs back into a UTF-8 string.
+
+        This method reverses the BBPE process: it maps IDs to BPE
+        tokens, joins them, translates the mapped characters back into
+        their original raw bytes, and decodes the bytearray into text.
+
+        Args:
+            token_ids (List[int]): The sequence of model-generated IDs.
+
+        Returns:
+            str: The human-readable decoded string. Replaces malformed
+            bytes with the standard unicode replacement character.
         """
         if not token_ids:
             return ""
@@ -76,8 +124,18 @@ class Tokenizer:
 
     def encode(self, text: str) -> List[int]:
         """
-        Encodes a standard UTF-8 string into a list of token IDs using a
-        greedy longest-match approach.
+        Encodes a standard string into a list of token IDs.
+
+        Uses a greedy longest-match approach. It first converts the
+        string into mapped BBPE characters, then iteratively scans
+        backwards from the end of the string to find the longest
+        possible substring that exists in the vocabulary.
+
+        Args:
+            text (str): The raw input string to encode.
+
+        Returns:
+            List[int]: A list of integer IDs representing the text.
         """
         if not text:
             return []
