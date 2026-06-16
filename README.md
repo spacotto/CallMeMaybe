@@ -60,8 +60,6 @@ By replacing traditional "generate-and-pray" post-processing with pre-generation
 
 ## Challenges faced
 
-### The Multi-Byte Fragmentation Crash
-
 ## Testing strategy
 
 The architecture is verified through a comprehensive, custom-built test suite (`make test`) that validates the project across multiple vectors:
