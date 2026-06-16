@@ -4,6 +4,23 @@ The `formatter` module acts as the **bridge between the parsed schemas and the L
 
 ## Theoretical Concepts
 
+### Model Templates (ChatML vs. Instruct)
+
+LLMs are fine-tuned using specific **conversational templates**. If a model was trained to expect `<|im_start|>system` (ChatML), feeding it `[INST] <<SYS>>` (Llama Instruct) will cause **structural fragmentation**, leading to **hallucinations** or **garbage text**. The formatter ensures the engine speaks the precise native language of the loaded weights.
+
+### Zero-Shot vs. Few-Shot Prompting
+
+| Zero-Shot | Few-Shot |
+| --- | --- |
+| Asking the model to perform a task with zero prior examples. This is computationally cheap but highly prone to logic errors in smaller models. | Injecting a small set of predefined examples into the prompt before asking the final question. This mathematically grounds the model's attention mechanism, showing it *how* to solve the problem rather than just telling it. |
+
+### Context Window Management
+
+Every LLM has a strict limit on the number of tokens it can hold in its "working memory" (the context window). Passing massive, nested JSON schemas for every available function all at once will overflow small models. The formatter compresses the data during routing (Phase 1) and only expands the required data during extraction (Phase 2) to preserve this limited computational space.
+
+### Memory Allocation in Python Strings
+
+In Python, strings are immutable. Using standard concatenation (`text += new_text`) forces the system to allocate entirely new blocks of memory and copy the old string for every single addition. By storing strings in a list and using `"".join()`, the system allocates memory exactly once at the end, drastically improving performance during heavy batch generation.
 
 ## Design Decisions
 
