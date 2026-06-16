@@ -4,6 +4,14 @@ _This project has been created as part of the 42 curriculum by spacotto._
 
 This project introduces **function calling** in **Large Language Models (LLMs)** by building a **self-contained system** that translates natural language prompts into structured function calls with explicitly typed arguments. While standard applications rely on prompt engineering (which is inherently non-deterministic and prone to syntax hallucinations), this architecture implements **constrained decoding** at the engine level by intercepting raw token probabilities (**logits**) during the autoregressive generation loop. By dynamically applying a mathematical mask to eliminate any token that violates the target schema, the engine guarantees **structurally valid JSON output** with **near-perfect reliability**. This approach achieves **deterministic compliance** even when deploying a **lightweight 0.5B parameter model** in resource-constrained environments.
 
+### What is HuggingFace?
+
+HuggingFace is a collaborative open-source platform and registry that hosts machine learning models, datasets, and AI libraries. It is essentially the "GitHub of AI," where models like Qwen and SmolLM are published and downloaded from.
+
+### What is Qwen (Qwen3-0.6B)?
+
+A highly capable, open-source family of Large Language Models (LLMs) developed by Alibaba Cloud. The 0.6B (600 million parameter) version is used as the default in this project because its small size allows it to run entirely locally on standard CPUs, making it the perfect lightweight testbed for constrained decoding.
+
 ## Instructions
 
 The project uses uv for fast dependency management and a Makefile for execution.
@@ -99,6 +107,8 @@ uv run python -m src \
 - [Hugging Face Transformers Documentation](https://huggingface.co/docs/transformers/index)
 - [Large Language Models (LLMs)](https://en.wikipedia.org/wiki/Large_language_model)
 - [Logit](https://en.wikipedia.org/wiki/Logit)
+- [Machine learning (ML)](https://en.wikipedia.org/wiki/Machine_learning)
+- [Natural language processing (NLP)](https://en.wikipedia.org/wiki/Natural_language_processing)
 - [Understanding Byte-Pair Encoding (BPE)](https://huggingface.co/learn/llm-course/chapter6/5)
 - [Understand tokens](https://learn.microsoft.com/en-us/dotnet/ai/conceptual/understanding-tokens)
 - [uv Package Manager](https://docs.astral.sh/uv/)
