@@ -2,7 +2,6 @@
 
 ## Theoretical Concepts
 
-## Glossary
 
 ## Design Decisions
 
@@ -43,3 +42,5 @@ Passing the full parameter schema for every available function during Phase 1 cl
 ### Zero-Shot Weakness in Small Models
 
 Sub-1B models struggle heavily with complex logical extractions (like mapping natural language to regex strings). Dynamically injecting function-specific examples acts as a critical anchor, dramatically improving the model's accuracy before the logit masking even begins.
+
+## Glossary
