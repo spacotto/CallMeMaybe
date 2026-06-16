@@ -60,6 +60,11 @@ The constrained decoding pipeline operates in three phases to **guarantee determ
 
 ### Data Ingestion (`src/parser/`)
 
+* **Strict Type Validation:** The module leverages Pydantic (`BaseModel`, `Field`) to map and strictly validate the input JSON schemas against hierarchical data models, including `FunctionDefinition`, `FunctionParameters`, and `FunctionProperty`.  
+* **Graceful Degradation**: During schema loading, if an individual function definition fails Pydantic validation, the parser logs the `ValidationError` and explicitly skips the malformed item rather than crashing the entire pipeline.
+* **Downstream Compatibility:** After ensuring structural integrity, the validated Pydantic objects are converted back into standard Python dictionaries using `model_dump(exclude_none=True)` to remain compatible with the core masking engine.
+* **Static Nesting Detection:** The `SchemaParser` includes a static `is_nested` method that iterates through function parameters to explicitly detect if any parameter is categorised as an "object".
+
 ### Context Preparation (`src/formatter/`)
 
 ### Low-Level Mechanics (`src/tokenizer/`)
@@ -85,6 +90,10 @@ By replacing traditional "generate-and-pray" post-processing with pre-generation
 * **Hardware Lock-in:** The environment variable design allows the Makefile to swap in lighter models (like SmolLM) on the fly without altering the source code, bypassing hardware limitations.
 
 ### Data Ingestion (`src/parser/`)
+
+* **Malformed Schema Crashes:** By enforcing structural rules upfront and catching both `json.JSONDecodeError` and Pydantic exceptions, the module prevents the engine from halting due to syntax errors, missing root lists, or invalid structures in the user-provided definitions.
+* **Missing Data Handling:** The use of `Optional` fields and default dictionary/list factories in the data models ensures the downstream pipeline always receives safe, predictable structures, bypassing `NoneType` errors.
+* **Output Consistency:** The module introduces the `FunctionCallResult` model, which acts as a structural guardrail to guarantee that every generated item matches the project's mandatory `prompt`, `name`, and `parameters` output format.
 
 ### Context Preparation (`src/formatter/`)
 
