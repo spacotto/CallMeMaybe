@@ -8,12 +8,39 @@ from src.parser.models.function_definition import FunctionDefinition
 
 
 class SchemaParser(BaseModel):
+    """
+    Parses and validates JSON schemas for function definitions.
+
+    This class acts as the ingestion gatekeeper. It reads the raw JSON file
+    containing function definitions and enforces strict structural validation
+    using Pydantic models. This ensures the downstream masking engine only
+    receives well-formed, safe dictionary objects.
+
+    Attributes:
+        file_path (str): The absolute or relative path to the JSON file
+            containing the functions definition.
+    """
     file_path: str = Field(
         ...,
         description="Path to the functions definition JSON file"
     )
 
     def load_functions(self) -> List[Dict[str, Any]]:
+        """
+        Reads, validates, and cleans the function definitions from the disk.
+
+        This method loads the JSON file and iterates through each function
+        definition, validating them against the `FunctionDefinition` Pydantic
+        model. If a definition is malformed, it logs the validation error
+        and skips the item, ensuring graceful degradation without crashing
+        the overall pipeline.
+
+        Returns:
+            List[Dict[str, Any]]: A list of validated function schemas cast
+            back into standard Python dictionaries. Returns an empty list if
+            the file is missing, the JSON is malformed, or the root element
+            is not a list.
+        """
         if not os.path.exists(self.file_path):
             error(f"Schema file not found at: {self.file_path}")
             return []
@@ -56,6 +83,22 @@ class SchemaParser(BaseModel):
     def is_nested(
         target_name: str, functions_schema: List[Dict[str, Any]]
     ) -> bool:
+        """
+        Determines if a target function's parameters contain nested objects.
+
+        This static analysis maps the parameter hierarchy to help the engine
+        proactively allocate larger token generation limits when the
+        structural complexity of a nested schema requires it.
+
+        Args:
+            target_name (str): The specific function name to inspect.
+            functions_schema (List[Dict[str, Any]]): The fully loaded and
+                validated list of function schemas.
+
+        Returns:
+            bool: True if the function contains at least one parameter of
+            type 'object'. False otherwise, or if the function is not found.
+        """
         for f_schema in functions_schema:
             if f_schema.get("name") == target_name:
                 params = f_schema.get("parameters", {})
