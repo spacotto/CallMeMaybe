@@ -18,6 +18,10 @@ In a pipeline, a single missing comma in one function definition should not cras
 
 ## Glossary
 
+### Model (Data Model)
+
+In the context of the parser, a "model" refers to a Pydantic class that acts as a strict structural blueprint. It defines the exact shape, required fields, and data types a Python object must possess to be considered valid. This should not be confused with the Large Language Model (LLM) itself.
+
 ### Nested Object
 
 A parameter within a function that is itself a dictionary containing its own parameters (e.g., a `location` object containing `city` and `country` properties).
