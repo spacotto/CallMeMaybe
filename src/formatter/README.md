@@ -18,7 +18,7 @@ LLMs are fine-tuned using specific **conversational templates**. If a model was 
 
 ### Context Window Management
 
-Every LLM has a strict limit on the number of tokens it can hold in its "working memory" (the context window). Passing massive, nested JSON schemas for every available function all at once will overflow small models. The formatter compresses the data during routing (Phase 1) and only expands the required data during extraction (Phase 2) to preserve this limited computational space.
+Every LLM has a strict limit on the number of tokens it can hold in its "working **memory**" (the **context window**). Passing massive, nested JSON schemas for every available function all at once will overflow small models. The formatter **compresses** the data during routing (Phase 1) and only expands the required data during extraction (Phase 2) to **preserve this limited computational space**.
 
 ### Memory Allocation in Python Strings
 
@@ -28,7 +28,7 @@ In Python, strings are immutable. Using standard concatenation (`text += new_tex
 
 ### Template Agnosticism
 
-The module utilises an `Enum` (`ModelFormat`) to dynamically construct prompts using either standard `CHATML` or `INSTRUCT` (Llama) syntax, decoupling the pipeline from a single model's architecture.
+The module utilises an `Enum` (`ModelFormat`) to **dynamically construct prompts** using either standard `CHATML` or `INSTRUCT` (Llama) syntax, **decoupling the pipeline from a single model's architecture**.
 
 ### Phase-Specific Prompting
 
@@ -65,3 +65,23 @@ Passing the full parameter schema for every available function during Phase 1 cl
 Sub-1B models struggle heavily with complex logical extractions (like mapping natural language to regex strings). Dynamically injecting function-specific examples acts as a critical anchor, dramatically improving the model's accuracy before the logit masking even begins.
 
 ## Glossary
+
+### ChatML
+
+Chat Markup Language. A prompting format commonly used by models like Qwen, utilising `<|im_start|>` and `<|im_end|>` tags to define roles.
+
+### Instruct Format
+
+A prompting syntax popularised by Meta's Llama models, using `[INST]` and `<<SYS>>` to separate system directives from user queries.
+
+### Control Tokens
+
+Special, non-linguistic tokens in an LLM's vocabulary that dictate the structure of a conversation rather than the content itself.
+
+### Context Window
+
+The maximum number of tokens (words/sub-words) an LLM can process at one time, encompassing both the input prompt and the generated output.
+
+### Disk I/O
+
+Input/Output operations interacting with the physical storage drive. Extremely slow compared to reading from RAM (in-memory caching).
