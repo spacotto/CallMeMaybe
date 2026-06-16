@@ -55,7 +55,7 @@ The constrained decoding pipeline operates in three phases to **guarantee determ
 * [Context Preparation](https://github.com/spacotto/CallMeMaybe/blob/main/src/formatter/README.md#design-decisions) (`src/formatter/`)
 * [Low-Level Mechanics](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md#design-decisions) (`src/tokenizer/`)
 * [Constrained Decoding, Finalisation & Output](https://github.com/spacotto/CallMeMaybe/blob/main/src/engine/README.md#design-decisions) (`src/engine/`)
-* Visualisation (`src/visualizer/`)
+* [Visualisation](https://github.com/spacotto/CallMeMaybe/blob/main/src/visualizer/README.md#design-decisions) (`src/visualizer/`)
 
 ## Performance analysis: Accuracy, Speed, and Reliability
 
@@ -71,7 +71,7 @@ By replacing traditional "generate-and-pray" post-processing with pre-generation
 * [Context Preparation](https://github.com/spacotto/CallMeMaybe/blob/main/src/formatter/README.md#challenges-solved) (`src/formatter/`)
 * [Low-Level Mechanics](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md#challenges-solved) (`src/tokenizer/`)
 * [Constrained Decoding, Finalisation & Output](https://github.com/spacotto/CallMeMaybe/blob/main/src/engine/README.md#design-decisions) (`src/engine/`)
-* Visualisation (`src/visualizer/`)
+* [Visualisation](https://github.com/spacotto/CallMeMaybe/blob/main/src/visualizer/README.md#challenges-solved) (`src/visualizer/`)
 
 ## Testing strategy
 
