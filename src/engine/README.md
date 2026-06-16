@@ -21,6 +21,18 @@ This engine **intercepts the logits** *before* they are converted into probabili
 
 To know exactly which characters are legal at any given millisecond, the `extractor` uses an incremental **Context-Free Grammar (CFG)** state machine. It updates its internal context (e.g., `EXPECT_KEY`, `IN_STRING_VALUE`) character-by-character, mapping the current JSON depth to the permitted token masks.
 
+### The Constrained Generation Cycle (Tokenisation Integration)
+
+Constrained decoding is an endless translation loop between human text and machine mathematics. The engine relies on the Tokenizer to bridge this gap at every single step of generation:
+
+1. **State Tracking (Text):** The engine tracks the current JSON prefix (e.g., `{"name": "`).
+2. **Rule Evaluation (Text):** The CFG state machine or Trie determines that the next valid characters can only be alphabetical or a closing quote `"`.
+3. **Encoding Translation (Math):** The engine queries the Tokenizer's vocabulary: *"Which integer Token IDs contain only these allowed characters?"*
+4. **Logit Masking (Math):** The engine takes the LLM's raw output array and sets the probabilities of all unapproved Token IDs to $-\infty$.
+5. **Prediction (Math):** The model selects the most probable allowed integer ID (e.g., `452`).
+6. **Decoding Translation (Text):** The Tokenizer decodes `452` back into a text string (e.g., `fn_`).
+7. **Loop:** The new text is appended to the prefix, and the cycle repeats until the JSON is closed.
+
 ## Design Decisions
 
 ### Matrix Parallelisation (Batching)
