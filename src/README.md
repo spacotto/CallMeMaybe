@@ -1,6 +1,20 @@
 # System Entry & Architecture
 
+The `src/` root module serves as the command centre and orchestrator for the entire constrained decoding pipeline. While the submodules (`parser`, `engine`, `formatter`) handle the specific low-level mechanics of parsing schemas or masking logits, this top-level module is responsible for the macro-execution. It acts as the pipeline manager: ingesting CLI arguments, managing hardware constraints via dynamic data chunking, executing the three-phase generation loop, and providing real-time pedagogical feedback via the terminal visualizer.
+
 ## Theoretical Concepts
+
+### Pipeline Isolation (Divide and Conquer)
+
+Small language models (sub-1B parameters) struggle to perform multiple complex reasoning tasks simultaneously. If asked to route a prompt *and* generate its complex arguments in a single step, they frequently hallucinate. By forcing the architecture into strictly isolated phases (Phase 1: Identify the target -> Phase 2: Extract the data -> Phase 3: Validate the format), the cognitive load on the LLM is drastically reduced, ensuring high deterministic accuracy on lightweight hardware.
+
+### Batch Processing vs. Sequential Processing
+
+Running prompts one-by-one leaves modern CPUs and GPUs idle, while attempting to process 10,000 prompts simultaneously will immediately exceed available VRAM. Batch processing strikes the mathematical balance: it groups data into manageable chunks, allowing the hardware to utilise highly optimised, parallelised matrix operations while strictly bounding maximum memory footprint.
+
+### Dynamic Resource Allocation
+
+In text generation, predicting tokens is computationally expensive. Not all prompts require the same resources; generating a single boolean value requires far fewer tokens than generating deeply nested arrays of strings. By dynamically calculating a strict `max_new_tokens` limit based on the specific shape of the targeted schema *before* generation begins, the orchestrator prevents computational waste and physically blocks the model from entering infinite hallucination loops.
 
 ## Design Decisions
 
@@ -43,3 +57,23 @@ The fail-safe injection in the post-processing loop prevents a single LLM halluc
 The environment variable design allows the Makefile to swap in lighter models (like SmolLM) on the fly without altering the source code, bypassing hardware limitations.
 
 ## Glossary
+
+### Batch Size
+
+The number of prompts processed simultaneously by the engine's matrix operations. 
+
+### OOM (Out-Of-Memory)
+
+A fatal hardware exception that occurs when an application attempts to allocate more VRAM/RAM than is physically available on the machine.
+
+### Generator (`yield`)
+
+A Python construct that returns a lazy iterator. Instead of loading an entire dataset into memory at once, it evaluates and returns one chunk at a time, keeping memory usage perfectly flat.
+
+### Graceful Degradation
+
+An architectural design principle ensuring that a localised failure (e.g., a single malformed JSON string) triggers a safe fallback rather than crashing the entire global process.
+
+### Hallucination
+
+In the context of constrained decoding, this refers to the LLM attempting to continuously generate infinite, repeating, or nonsensical tokens instead of cleanly closing the JSON structure.
