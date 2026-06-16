@@ -156,19 +156,36 @@ A hidden Unicode character used to combine multiple distinct emojis or character
 
 A placeholder used by legacy tokenisers when they encounter a character not present in their vocabulary.
 
-## Example Usage
+## Pipeline Integration: Constrained Decoding
 
-```python
-from src.tokenizer import Tokenizer
+To understand how encoding and decoding serve the broader masking engine, consider this simplified millisecond of the Phase 1 generation loop:
 
-tokenizer = Tokenizer()
+```text
+=========================================================================
+1. THE CURRENT STATE
+=========================================================================
+The LLM has generated: {"name": "fn_sub
+The Trie states the only valid next characters are: ['s', 't', 'i', '"']
 
-# Encoding
-text = "What is the sum of 2 and 3?"
-ids = tokenizer.encode(text)
-# >>> [3838, 374, 279, 2629, 315, 220, 17, 323, 220, 18, 30]
+=========================================================================
+2. THE VOCABULARY SCAN (Using Tokenizer Indexes)
+=========================================================================
+The engine uses the Tokenizer's inverted index (`string_to_ids`) to find 
+every token that fits the Trie's rules:
+- "stitute" -> ID 8902
+- "st"      -> ID 450
+- "\""      -> ID 2
 
-# Decoding
-decoded_text = tokenizer.decode(ids)
-# >>> "What is the sum of 2 and 3?"
+=========================================================================
+3. THE MASKING MATRIX
+=========================================================================
+The engine creates a boolean array of 150,000 Falses. 
+It sets index 8902, 450, and 2 to True. All other tokens are masked to -inf.
+
+=========================================================================
+4. THE PREDICTION & DECODING
+=========================================================================
+The LLM selects ID 8902.
+The engine calls `tokenizer.decode([8902])` -> Returns "stitute".
+The new state becomes: {"name": "fn_substitute
 ```
