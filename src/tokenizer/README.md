@@ -105,3 +105,19 @@ into human-readable text.
 =========================================================================
 Final Text: "What is the"
 ```
+
+## Design Decisions
+
+### Pedagogical Transparency
+
+Built from scratch using standard Python libraries to expose the mechanics of text tokenisation, avoiding dependency on heavy external AI libraries.
+
+### Greedy vs. Rules-Based Merging
+
+The encoder utilises a greedy longest-match algorithm rather than parsing a strict `merges.txt` rule file. While mathematically sound and highly robust for constrained decoding, **the exact array of IDs generated may occasionally differ slightly from the official model tokenisers on complex words**, though the decoded output remains perfectly functionally equivalent.
+
+### Low-Level Byte Buffering
+
+Instead of decoding token-by-token, the decoder pushes all integers into a C-style bytearray. This allows Python's internal engine to safely stitch fragmented multi-byte characters together before rendering, avoiding string manipulation crashes.
+
+## Challenges Solved
