@@ -121,3 +121,16 @@ The encoder utilises a greedy longest-match algorithm rather than parsing a stri
 Instead of decoding token-by-token, the decoder pushes all integers into a C-style bytearray. This allows Python's internal engine to safely stitch fragmented multi-byte characters together before rendering, avoiding string manipulation crashes.
 
 ## Challenges Solved
+
+### The `<UNK>` Problem
+
+Older tokenisers crash or output `<UNK>` (Unknown) if they encounter a rare foreign character. By mapping everything to 256 foundational bytes, this tokeniser achieves 100% vocabulary coverage.
+
+### Emoji Fragmentation & Attention Looping
+
+A modern emoji (like ✨) is a sequence of multiple Unicode code points joined by a **"Zero Width Joiner" (ZWJ)**. Older tokenisers fragment these, disorienting the LLM's attention mechanism and causing endless generation loops. BBPE handles the raw byte structure natively, preventing hallucinations.
+
+### Multi-Byte Decoding Crashes
+
+Complex characters (like a French accent) can be split across multiple tokens. Attempting to decode the first half of a split byte sequence will trigger a fatal `utf-8 codec can't decode byte` error. The byte buffer approach mitigates this.
+
