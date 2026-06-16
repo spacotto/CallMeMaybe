@@ -53,7 +53,7 @@ The constrained decoding pipeline operates in three phases to **guarantee determ
 * [System Entry & Architecture](https://github.com/spacotto/CallMeMaybe/blob/main/src/README.md#design-decisions) (`src/__main__.py`)
 * [Data Ingestion](https://github.com/spacotto/CallMeMaybe/blob/main/src/parser/README.md#design-decisions) (`src/parser/`)
 * [Context Preparation](https://github.com/spacotto/CallMeMaybe/blob/main/src/formatter/README.md#design-decisions) (`src/formatter/`)
-* Low-Level Mechanics (`src/tokenizer/`)
+* [Low-Level Mechanics](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md#design-decisions) (`src/tokenizer/`)
 * Constrained Decoding, Finalisation & Output (`src/engine/`)
 * Visualisation (`src/visualizer/`)
 
@@ -69,7 +69,7 @@ By replacing traditional "generate-and-pray" post-processing with pre-generation
 * [System Entry & Architecture](https://github.com/spacotto/CallMeMaybe/blob/main/src/README.md#challenges-solved) (`src/__main__.py`)
 * [Data Ingestion](https://github.com/spacotto/CallMeMaybe/blob/main/src/parser/README.md#challenges-solved) (`src/parser/`)
 * [Context Preparation](https://github.com/spacotto/CallMeMaybe/blob/main/src/formatter/README.md#challenges-solved) (`src/formatter/`)
-* Low-Level Mechanics (`src/tokenizer/`)
+* [Low-Level Mechanics](https://github.com/spacotto/CallMeMaybe/blob/main/src/tokenizer/README.md#challenges-solved) (`src/tokenizer/`)
 * Constrained Decoding, Finalisation & Output (`src/engine/`)
 * Visualisation (`src/visualizer/`)
 
