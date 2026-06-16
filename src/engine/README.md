@@ -74,6 +74,15 @@ A NumPy boolean array applied to the logits to suppress invalid tokens by settin
 ### Softmax
 
 A mathematical function that converts a vector of raw logits into a normalised probability distribution (values between 0 and 1 that sum to 1).
-### Autoregressive:** A generation process where the model predicts the next element in a sequence based on all previously generated elements.
-### Prefix:** The exact string of text the model has generated up to the current millisecond.
-### O(1) Time Complexity:** An operation that takes a constant amount of time to execute, regardless of the size of the dataset (e.g., a direct dictionary lookup).
+
+### Autoregressive
+
+A generation process where the model predicts the next element in a sequence based on all previously generated elements.
+
+### Prefix
+
+The exact string of text the model has generated up to the current millisecond.
+
+### O(1) Time Complexity
+
+An operation that takes a constant amount of time to execute, regardless of the size of the dataset (e.g., a direct dictionary lookup).
