@@ -134,3 +134,41 @@ A modern emoji (like ✨) is a sequence of multiple Unicode code points joined b
 
 Complex characters (like a French accent) can be split across multiple tokens. Attempting to decode the first half of a split byte sequence will trigger a fatal `utf-8 codec can't decode byte` error. The byte buffer approach mitigates this.
 
+## Glossary
+
+### BBPE (Byte-Level Byte-Pair Encoding)
+
+A tokenisation algorithm that builds its vocabulary from the 256 fundamental bytes of data, rather than whole words or standard characters.
+
+### Token
+
+The atomic unit of data for an LLM. Visually, a piece of text, but computationally an integer ID.
+
+### Vocabulary
+
+The complete, fixed dictionary mapping specific string chunks to their corresponding integer IDs.
+
+### Zero Width Joiner (ZWJ)
+
+A hidden Unicode character used to combine multiple distinct emojis or characters into a single rendered glyph.
+
+### `<UNK>` Token
+
+A placeholder used by legacy tokenisers when they encounter a character not present in their vocabulary.
+
+## Example Usage
+
+```python
+from src.tokenizer import Tokenizer
+
+tokenizer = Tokenizer()
+
+# Encoding
+text = "What is the sum of 2 and 3?"
+ids = tokenizer.encode(text)
+# >>> [3838, 374, 279, 2629, 315, 220, 17, 323, 220, 18, 30]
+
+# Decoding
+decoded_text = tokenizer.decode(ids)
+# >>> "What is the sum of 2 and 3?"
+```
