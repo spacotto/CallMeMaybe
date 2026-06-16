@@ -58,6 +58,14 @@ The environment variable design allows the Makefile to swap in lighter models (l
 
 ## Glossary
 
+### Batching (Macro)
+
+The practice of grouping multiple prompts into a single payload before sending them to the LLM. In this pipeline, it is managed by a Python generator to protect system RAM and GPU VRAM from Out-Of-Memory (OOM) crashes.
+
+### Caching (Macro)
+
+Storing the results of slow, repetitive operations (like reading few-shot JSON files from the physical hard drive) in fast, temporary RAM (memory) so they only need to be executed once per batch run.
+
 ### Batch Size
 
 The number of prompts processed simultaneously by the engine's matrix operations. 
