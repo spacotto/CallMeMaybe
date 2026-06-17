@@ -19,9 +19,7 @@ FUNC_DEF ?= data/input/functions_definition.json
 INPUT_F	 ?= data/input/function_calling_tests.json
 OUTPUT_F ?= data/output/function_calls.json
 
-MODEL_A	:= HuggingFaceTB/SmolLM-135M-Instruct
-MODEL_B	:= Qwen/Qwen2.5-1.5B-Instruct
-ALT	?= $(MODEL_A)
+ALT	?= HuggingFaceTB/SmolLM-135M-Instruct
 HF_OFF	:= HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1
 
 # ------------------------------------------------------------
