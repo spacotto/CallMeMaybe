@@ -7,6 +7,39 @@ Rather than relying on the LLM to "understand" JSON through prompt engineering, 
 2. **Context-Aware Extraction (`extractor.py`):** Drives the complex, stateful generation of JSON arguments.
 3. **Validation & Fallback (`postprocessor.py`):** Enforces strict Pydantic rules and handles type coercion.
 
+## Execution Flow: Step-by-Step Algorithm
+
+The constrained decoding algorithm operates as a rigorous pipeline that intercepts the LLM's text generation process at the mathematical level. Here is the exact lifecycle of a prompt passing through the engine.
+
+### Phase 0: Pre-computation (The Setup)
+
+Before any text is generated, the engine pre-computes the rules of the schema to avoid heavy calculations during the live generation loop.
+1. **Trie Construction:** The allowed function names are inserted into a custom `SchemaTrie`. This Prefix Tree caches all valid string continuations in memory, reducing complex string validation to an O(1) set lookup.
+2. **Vocabulary Masking:** The `SchemaExtractor` loops through the LLM's entire vocabulary (over 150,000 tokens) exactly once upon initialisation. It creates static boolean arrays (masks) for structural characters (`struct_mask`), safe wildcard strings (`wildcard_string_mask`), and specific data types (`type_masks`).
+
+### Phase 1: Zero-Shot Routing (`classifier.py`)
+
+The system must first determine *which* function the user wants to call.
+1. **Formatting:** The user's prompt and a compressed summary of the available schemas are assembled into the model's native template (e.g., ChatML).
+2. **Tokenization:** The text is encoded into integer IDs using the custom Byte-Level BPE tokeniser.
+3. **The Masking Loop:** The model predicts the next token by outputting an array of unnormalized probabilities (logits). The engine checks the `SchemaTrie` to see which characters are legally allowed to follow the current prefix. 
+4. **Suppression:** The engine applies a boolean mask to the logits. Any token ID that does not form a valid function name is overwritten with negative infinity (`-np.inf`). The model selects the most probable *allowed* token, and this loop repeats until a closing quote is generated.
+
+### Phase 2: Argument Extraction (`extractor.py`)
+
+Once the target function is known, the engine extracts the specific arguments in a highly controlled, batched loop.
+1. **State Tracking:** The `JSONParserState` machine acts as the engine's eyes. Every time a new character is generated, this state machine updates its context (e.g., shifting from `EXPECT_KEY` to `EXPECT_COLON` or `IN_STRING_VALUE`).
+2. **Dynamic Mask Assembly:** Based on the current state and the expected schema type, the engine combines the pre-computed vocabulary masks using fast bitwise operations (e.g., `mask &= self.type_masks["number"]`). 
+3. **Batched Logit Masking:** The raw logits for all prompts in the batch are collected into a 2D NumPy matrix (`logits_matrix = np.stack(batch_logits)`). The dynamic masks are applied simultaneously to the entire batch, setting all illegal token probabilities to `-np.inf`.
+4. **Greedy Selection & Decoding:** The engine uses `np.argmax` to select the mathematically highest allowed token ID for each prompt. The `Tokenizer` decodes these IDs back into text, the string is appended, and the cycle repeats until the JSON structure is fully closed.
+
+### Phase 3: Post-Processing & Degradation (`postprocessor.py`)
+
+Because constrained decoding guarantees structural syntax but can occasionally miss edge-case type coercions (like generating `"3"` instead of `3`), the final phase acts as a safety net.
+1. **Parsing:** The generated raw string is parsed into a Python dictionary, catching any impossible `JSONDecodeError`s and substituting a safe fallback.
+2. **Type Coercion:** The engine cross-references the dictionary against the original schema and forces variables into their correct types (e.g., casting floats to integers).
+3. **Pydantic Enforcement:** The dictionary is pushed through the `FunctionCallResult` data model. If it passes, the perfect JSON is saved; if it fails, a graceful fallback is injected to ensure the pipeline never crashes.
+
 ## Theoretical Concepts
 
 ### Autoregressive Generation & Logits
